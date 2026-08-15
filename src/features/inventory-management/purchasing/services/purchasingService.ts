@@ -141,7 +141,7 @@ export const purchasingService = {
 
   async createPurchase(input: CreatePurchaseInput): Promise<{ purchase_id: string; purchase_number: string; total_amount: number }> {
     // Strictly call secure backend RPC: private.create_purchase
-    const { data, error } = await supabase.rpc('create_purchase', {
+    const { data, error } = await supabase.schema('private').rpc('create_purchase', {
       p_supplier_id: input.supplier_id,
       p_purchase_date: input.purchase_date || new Date().toISOString().split('T')[0],
       p_discount: input.discount ?? 0,
