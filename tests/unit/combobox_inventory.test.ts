@@ -107,4 +107,22 @@ describe('Combobox UX & Inventory/Repair Bug Fix Unit Tests', () => {
       'new row violates row-level security policy for table "brands"'
     );
   });
+
+  it('6. Successfully fetches brands list via inventoryService.getBrands', async () => {
+    const mockBrands = [
+      { id: 'b_01', name: 'Apple', is_active: true },
+      { id: 'b_02', name: 'Samsung', is_active: true },
+    ];
+    const mockOrder = vi.fn().mockResolvedValue({ data: mockBrands, error: null });
+    const mockEq = vi.fn().mockReturnValue({ order: mockOrder });
+    const mockSelect = vi.fn().mockReturnValue({ eq: mockEq });
+
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as any);
+
+    const result = await inventoryService.getBrands();
+
+    expect(supabase.from).toHaveBeenCalledWith('brands');
+    expect(result).toHaveLength(2);
+    expect(result[0].name).toBe('Apple');
+  });
 });
