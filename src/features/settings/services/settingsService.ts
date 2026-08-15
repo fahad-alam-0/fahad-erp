@@ -57,8 +57,8 @@ export const settingsService = {
   },
 
   async setUserRole(targetUserId: string, newRole: UserRole): Promise<void> {
-    // Strictly call Migration 003 RPC: set_user_role via PostgREST search path
-    const { error } = await supabase.rpc('set_user_role', {
+    // Strictly call Migration 003 RPC: private.set_user_role
+    const { error } = await supabase.schema('private').rpc('set_user_role', {
       target_user_id: targetUserId,
       new_role: newRole,
     });
