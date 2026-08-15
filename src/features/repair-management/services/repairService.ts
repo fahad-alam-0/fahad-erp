@@ -149,7 +149,7 @@ export const repairService = {
     status: string;
     service_revenue: number;
   }> {
-    const { data, error } = await supabase.schema('private').rpc('create_repair_job', {
+    const { data, error } = await supabase.rpc('create_repair_job', {
       p_customer_id: input.customer_id,
       p_device_type: input.device_type,
       p_device_brand: input.device_brand,
@@ -172,7 +172,7 @@ export const repairService = {
   },
 
   async assignTechnician(repairId: string, technicianId: string): Promise<void> {
-    const { error } = await supabase.schema('private').rpc('assign_repair_technician', {
+    const { error } = await supabase.rpc('assign_repair_technician', {
       p_repair_id: repairId,
       p_technician_id: technicianId,
     });
@@ -184,7 +184,7 @@ export const repairService = {
   },
 
   async updateRepairStatus(repairId: string, status: RepairStatus, notes?: string): Promise<void> {
-    const { error } = await supabase.schema('private').rpc('update_repair_status', {
+    const { error } = await supabase.rpc('update_repair_status', {
       p_repair_id: repairId,
       p_new_status: status,
       p_notes: notes || null,
@@ -197,7 +197,7 @@ export const repairService = {
   },
 
   async addRepairPart(repairId: string, productId: string, quantity: number): Promise<void> {
-    const { error } = await supabase.schema('private').rpc('add_repair_part', {
+    const { error } = await supabase.rpc('add_repair_part', {
       p_repair_id: repairId,
       p_product_id: productId,
       p_quantity: quantity,
@@ -216,7 +216,7 @@ export const repairService = {
     reference?: string,
     notes?: string
   ): Promise<void> {
-    const { error } = await supabase.schema('private').rpc('add_repair_payment', {
+    const { error } = await supabase.rpc('add_repair_payment', {
       p_repair_id: repairId,
       p_payment_method: method,
       p_amount: amount,
@@ -231,7 +231,7 @@ export const repairService = {
   },
 
   async finalizeFinancials(repairId: string, finalServiceRevenue?: number): Promise<void> {
-    const { error } = await supabase.schema('private').rpc('finalize_repair_financials', {
+    const { error } = await supabase.rpc('finalize_repair_financials', {
       p_repair_id: repairId,
       p_final_service_revenue: finalServiceRevenue ?? null,
     });

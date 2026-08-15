@@ -215,8 +215,8 @@ export const inventoryService = {
   },
 
   async adjustStock(input: AdjustInventoryInput): Promise<{ product_id: string; new_stock_quantity: number; movement_id: string }> {
-    // Strictly call secure backend RPC: private.adjust_inventory
-    const { data, error } = await supabase.schema('private').rpc('adjust_inventory', {
+    // Strictly call secure backend RPC: adjust_inventory via PostgREST extra_search_path
+    const { data, error } = await supabase.rpc('adjust_inventory', {
       p_product_id: input.product_id,
       p_movement_type: input.movement_type,
       p_quantity: input.quantity,

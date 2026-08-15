@@ -74,8 +74,8 @@ export const salesService = {
     payment_status: string;
     sale_status: string;
   }> {
-    // Strictly call secure backend RPC: private.create_sale
-    const { data, error } = await supabase.schema('private').rpc('create_sale', {
+    // Strictly call secure backend RPC: create_sale via PostgREST extra_search_path
+    const { data, error } = await supabase.rpc('create_sale', {
       p_customer_id: input.customer_id || null,
       p_discount: input.discount ?? 0,
       p_notes: input.notes?.trim() || null,
