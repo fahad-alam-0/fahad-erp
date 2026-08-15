@@ -53,12 +53,12 @@ export const QuickActionsBar: React.FC<QuickActionsBarProps> = ({ role }) => {
   const actions = getActions();
 
   return (
-    <div className="p-4 rounded-lg border border-border bg-card space-y-3">
+    <div className="p-4 rounded-xl border border-border bg-card/60 backdrop-blur-xs space-y-3 shadow-2xs">
       <div className="flex items-center space-x-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        <Sparkles className="w-3.5 h-3.5 text-primary" />
-        <span>Role Quick Actions</span>
+        <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+        <span>Quick Actions</span>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 sm:gap-2.5">
         {actions.map((act, idx) => {
           const Icon = act.icon;
           return (
@@ -67,7 +67,7 @@ export const QuickActionsBar: React.FC<QuickActionsBarProps> = ({ role }) => {
               variant={act.variant}
               size="sm"
               onClick={() => navigate(act.path)}
-              className="flex items-center space-x-1.5 text-xs font-medium"
+              className="flex items-center space-x-1.5 text-xs font-medium pressable"
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />
               <span>{act.label}</span>

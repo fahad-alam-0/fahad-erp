@@ -1,26 +1,99 @@
-import React from 'react';
-import { Header } from '@/components/common/Header';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import React, { useState } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { ProfileSection } from '../components/ProfileSection';
+import { UserManagementTable } from '../components/UserManagementTable';
+import { ApplicationSettingsSection } from '../components/ApplicationSettingsSection';
+import { SecuritySection } from '../components/SecuritySection';
+import { SystemInfoSection } from '../components/SystemInfoSection';
+import { PageHeader } from '@/components/common/PageHeader';
+import { User, Users, Sliders, ShieldCheck, Info } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
+  const { user } = useAuthStore();
+  const userRole = user?.role || 'STAFF';
+  const isOwner = userRole === 'OWNER';
+
+  const [activeTab, setActiveTab] = useState<string>('profile');
+
   return (
     <div className="space-y-6">
-      <Header title="System & Store Settings" subtitle="Configure branch information, receipt printing, tax settings, and PWA options." />
-      <Card>
-        <CardHeader>
-          <CardTitle>General Store Profile</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4 text-sm">
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Store Name</label>
-            <input defaultValue="Fahad Electronics & Repair Center" className="w-full h-10 px-3 border border-input rounded-md bg-background mt-1" />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Tax / VAT Percentage (%)</label>
-            <input defaultValue="5.0" className="w-full h-10 px-3 border border-input rounded-md bg-background mt-1" />
-          </div>
-        </CardContent>
-      </Card>
+      {/* Page Header */}
+      <PageHeader
+        title="System Settings & Administration"
+        subtitle="Manage personal profiles, administrative user roles, theme preferences, and session security."
+      />
+
+      {/* Settings Navigation Tabs */}
+      <div className="flex border-b border-border bg-card rounded-t-xl px-4 pt-2 shadow-2xs overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            activeTab === 'profile'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <User className="w-4 h-4 text-primary" />
+          <span>My Profile</span>
+        </button>
+
+        {isOwner && (
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+              activeTab === 'users'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users className="w-4 h-4 text-emerald-500" />
+            <span>Users & Roles (Owner Only)</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => setActiveTab('app')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            activeTab === 'app'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Sliders className="w-4 h-4 text-sky-500" />
+          <span>Application Preferences</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            activeTab === 'security'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+          <span>Security & Session</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('info')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            activeTab === 'info'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Info className="w-4 h-4 text-amber-500" />
+          <span>System Information</span>
+        </button>
+      </div>
+
+      {/* Tab Contents */}
+      {activeTab === 'profile' && <ProfileSection />}
+      {activeTab === 'users' && isOwner && <UserManagementTable />}
+      {activeTab === 'app' && <ApplicationSettingsSection />}
+      {activeTab === 'security' && <SecuritySection />}
+      {activeTab === 'info' && <SystemInfoSection />}
     </div>
   );
 };

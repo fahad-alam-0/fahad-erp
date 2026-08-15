@@ -88,18 +88,18 @@ const router = createBrowserRouter([
               { path: ROUTES.REPORTS, element: <ReportsPage /> },
               { path: ROUTES.ANALYTICS, element: <AnalyticsPage /> },
               { path: ROUTES.NOTIFICATIONS, element: <NotificationsPage /> },
+              { path: ROUTES.SETTINGS, element: <SettingsPage /> },
+              { path: ROUTES.PROFILE, element: <ProfilePage /> },
 
               // Owner restricted area
               {
                 element: <RoleGuard allowedRoles={[UserRole.OWNER]} />,
                 children: [
-                  { path: ROUTES.SETTINGS, element: <SettingsPage /> },
                   { path: ROUTES.BACKUP, element: <BackupPage /> },
                   { path: ROUTES.ACTIVITY_LOG, element: <ActivityLogPage /> },
                 ],
               },
 
-              { path: ROUTES.PROFILE, element: <ProfilePage /> },
               { path: '*', element: <NotFoundPage /> },
             ],
           },
