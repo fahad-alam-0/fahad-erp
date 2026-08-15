@@ -4,6 +4,7 @@ import { repairService } from '../services/repairService';
 import { customerService } from '@/features/customer-management/services/customerService';
 import { Customer } from '@/features/customer-management/types/customer.types';
 import { UserProfile } from '@/types/user.types';
+import { SearchableCombobox, ComboboxOption } from '@/components/ui/SearchableCombobox';
 import { Button } from '@/components/ui/button';
 import { X, Loader2, Wrench, AlertCircle } from 'lucide-react';
 
@@ -69,6 +70,12 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleCreateCustomer = async (fullName: string) => {
+    const created = await customerService.createCustomer({ full_name: fullName, phone: 'N/A' });
+    setCustomers((prev) => [...prev, created]);
+    return { id: created.id, name: created.full_name };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -131,6 +138,18 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
     }
   };
 
+  const customerOptions: ComboboxOption[] = customers.map((c) => ({
+    id: c.id,
+    name: c.full_name,
+    subtitle: c.phone ? `Ph: ${c.phone}` : undefined,
+  }));
+
+  const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
+    id: t.id,
+    name: t.full_name,
+    subtitle: `Role: ${t.role}`,
+  }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -157,24 +176,21 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             </div>
           )}
 
-          {/* Customer Selection */}
+          {/* Customer Selection Combobox */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1">
               <span>Customer</span>
               <span className="text-destructive">*</span>
             </label>
-            <select
-              required
+            <SearchableCombobox
+              options={customerOptions}
               value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-            >
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name} ({c.phone})
-                </option>
-              ))}
-            </select>
+              onChange={setCustomerId}
+              placeholder="Select Customer..."
+              searchPlaceholder="Search or create customer..."
+              onCreateNew={handleCreateCustomer}
+              required
+            />
           </div>
 
           {/* Device Category & Brand */}
@@ -292,24 +308,21 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             </div>
           </div>
 
-          {/* Technician Assignment (Owner Only) */}
+          {/* Technician Assignment (Owner Only) Combobox */}
           {isOwner && (
             <div className="space-y-1.5 pt-2 border-t border-border">
               <label className="text-xs font-semibold text-foreground">
                 Assign Repair Technician (Owner Only)
               </label>
-              <select
+              <SearchableCombobox
+                options={technicianOptions}
                 value={technicianId}
-                onChange={(e) => setTechnicianId(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-              >
-                <option value="">Unassigned (Assign Later)</option>
-                {technicians.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.full_name} ({t.role})
-                  </option>
-                ))}
-              </select>
+                onChange={setTechnicianId}
+                placeholder="Unassigned (Assign Later)..."
+                searchPlaceholder="Search technician by name..."
+                allowClear
+                clearLabel="Unassigned (Assign Later)"
+              />
             </div>
           )}
 

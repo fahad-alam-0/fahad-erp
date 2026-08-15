@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Supplier } from '../types/purchasing.types';
 import { Product } from '../../types/inventory.types';
 import { purchasingService } from '../services/purchasingService';
+import { SearchableCombobox, ComboboxOption } from '@/components/ui/SearchableCombobox';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +31,7 @@ interface NewPurchaseModalProps {
   products: Product[];
   onClose: () => void;
   onSuccess: () => void;
+  onSupplierCreated?: (newSup: Supplier) => void;
 }
 
 export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
@@ -39,7 +41,9 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
   products,
   onClose,
   onSuccess,
+  onSupplierCreated,
 }) => {
+  const [localSuppliers, setLocalSuppliers] = useState<Supplier[]>(suppliers);
   const [supplierId, setSupplierId] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'PARTIAL' | 'UNPAID'>('UNPAID');
@@ -59,10 +63,14 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
   const [successInfo, setSuccessInfo] = useState<{ purchase_number: string; total_amount: number } | null>(null);
 
   useEffect(() => {
+    setLocalSuppliers(suppliers);
+  }, [suppliers]);
+
+  useEffect(() => {
     if (initialSupplier) {
       setSupplierId(initialSupplier.id);
-    } else if (suppliers.length > 0) {
-      setSupplierId(suppliers[0].id);
+    } else if (localSuppliers.length > 0) {
+      setSupplierId(localSuppliers[0].id);
     }
 
     if (products.length > 0) {
@@ -78,7 +86,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
     setItems([]);
     setFormError(null);
     setSuccessInfo(null);
-  }, [initialSupplier, suppliers, products, isOpen]);
+  }, [initialSupplier, localSuppliers, products, isOpen]);
 
   if (!isOpen) return null;
 
@@ -88,6 +96,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
     if (p) {
       setItemUnitCost(String(p.current_cost_price || 0));
     }
+  };
+
+  const handleCreateSupplier = async (name: string) => {
+    const created = await purchasingService.createSupplier({ name });
+    setLocalSuppliers((prev) => [...prev, created]);
+    if (onSupplierCreated) onSupplierCreated(created);
+    return { id: created.id, name: created.name };
   };
 
   const handleAddItem = () => {
@@ -130,7 +145,7 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
       },
     ]);
 
-    // Reset item selector fields
+    // Reset item quantity
     setItemQuantity('1');
   };
 
@@ -191,6 +206,18 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
     }
   };
 
+  const supplierOptions: ComboboxOption[] = localSuppliers.map((s) => ({
+    id: s.id,
+    name: s.name,
+    subtitle: s.phone ? `Ph: ${s.phone}` : undefined,
+  }));
+
+  const productOptions: ComboboxOption[] = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    subtitle: `${p.stock_quantity} ${p.unit} in stock`,
+  }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -243,19 +270,15 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
                   <span>Supplier</span>
                   <span className="text-destructive">*</span>
                 </label>
-                <select
-                  required
+                <SearchableCombobox
+                  options={supplierOptions}
                   value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-                >
-                  <option value="">Select Supplier</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSupplierId}
+                  placeholder="Select Supplier..."
+                  searchPlaceholder="Search or create supplier..."
+                  onCreateNew={handleCreateSupplier}
+                  required
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -291,17 +314,13 @@ export const NewPurchaseModal: React.FC<NewPurchaseModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div className="sm:col-span-2 space-y-1">
-                  <select
+                  <SearchableCombobox
+                    options={productOptions}
                     value={selectedProductId}
-                    onChange={(e) => handleProductSelectChange(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-                  >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.stock_quantity} {p.unit} in stock)
-                      </option>
-                    ))}
-                  </select>
+                    onChange={handleProductSelectChange}
+                    placeholder="Select Product..."
+                    searchPlaceholder="Search products..."
+                  />
                 </div>
 
                 <div className="space-y-1">

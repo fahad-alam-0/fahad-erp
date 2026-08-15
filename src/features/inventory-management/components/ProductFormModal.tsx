@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, Category, Brand, CreateProductInput } from '../types/inventory.types';
+import { inventoryService } from '../services/inventoryService';
+import { SearchableCombobox, ComboboxOption } from '@/components/ui/SearchableCombobox';
 import { Button } from '@/components/ui/button';
 import { X, Loader2, Package } from 'lucide-react';
 
@@ -10,6 +12,8 @@ interface ProductFormModalProps {
   brands: Brand[];
   onClose: () => void;
   onSave: (data: CreateProductInput) => Promise<void>;
+  onCategoryCreated?: (newCategory: Category) => void;
+  onBrandCreated?: (newBrand: Brand) => void;
 }
 
 export const ProductFormModal: React.FC<ProductFormModalProps> = ({
@@ -19,7 +23,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   brands,
   onClose,
   onSave,
+  onCategoryCreated,
+  onBrandCreated,
 }) => {
+  const [localCategories, setLocalCategories] = useState<Category[]>(categories);
+  const [localBrands, setLocalBrands] = useState<Brand[]>(brands);
+
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [brandId, setBrandId] = useState('');
@@ -36,6 +45,14 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLocalCategories(categories);
+  }, [categories]);
+
+  useEffect(() => {
+    setLocalBrands(brands);
+  }, [brands]);
+
+  useEffect(() => {
     if (product) {
       setName(product.name || '');
       setCategoryId(product.category_id || '');
@@ -50,7 +67,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setIsActive(product.is_active ?? true);
     } else {
       setName('');
-      setCategoryId(categories[0]?.id || '');
+      setCategoryId(localCategories[0]?.id || '');
       setBrandId('');
       setProductCode('');
       setSellingPrice('0');
@@ -62,9 +79,25 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setIsActive(true);
     }
     setFormError(null);
-  }, [product, isOpen, categories]);
+  }, [product, isOpen]);
 
   if (!isOpen) return null;
+
+  // Category creation callback for Combobox
+  const handleCreateCategory = async (catName: string) => {
+    const created = await inventoryService.createCategory(catName);
+    setLocalCategories((prev) => [...prev, created]);
+    if (onCategoryCreated) onCategoryCreated(created);
+    return { id: created.id, name: created.name };
+  };
+
+  // Brand creation callback for Combobox
+  const handleCreateBrand = async (brandName: string) => {
+    const created = await inventoryService.createBrand(brandName);
+    setLocalBrands((prev) => [...prev, created]);
+    if (onBrandCreated) onBrandCreated(created);
+    return { id: created.id, name: created.name };
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +155,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
   const isEditing = Boolean(product);
 
+  const categoryOptions: ComboboxOption[] = localCategories.map((c) => ({
+    id: c.id,
+    name: c.name,
+  }));
+
+  const brandOptions: ComboboxOption[] = localBrands.map((b) => ({
+    id: b.id,
+    name: b.name,
+  }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -168,41 +211,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Category Searchable Combobox */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground flex items-center gap-1">
                   <span>Category</span>
                   <span className="text-destructive">*</span>
                 </label>
-                <select
-                  required
+                <SearchableCombobox
+                  options={categoryOptions}
                   value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setCategoryId}
+                  placeholder="Select Category..."
+                  searchPlaceholder="Search or create category..."
+                  onCreateNew={handleCreateCategory}
+                  required
+                />
               </div>
 
+              {/* Brand Searchable Combobox */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">Brand (Optional)</label>
-                <select
+                <SearchableCombobox
+                  options={brandOptions}
                   value={brandId}
-                  onChange={(e) => setBrandId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-                >
-                  <option value="">Select Brand</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setBrandId}
+                  placeholder="Select Brand..."
+                  searchPlaceholder="Search or create brand..."
+                  allowClear
+                  clearLabel="None / Unbranded"
+                  onCreateNew={handleCreateBrand}
+                />
               </div>
             </div>
 

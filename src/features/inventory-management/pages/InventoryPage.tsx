@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
 import {
   PackagePlus,
-  Sliders,
   Search,
   X,
   Package,
@@ -100,40 +99,42 @@ export const InventoryPage: React.FC = () => {
     setIsFormModalOpen(true);
   };
 
-  const handleEditClick = (prod: Product) => {
-    setEditingProduct(prod);
+  const handleEditClick = (p: Product) => {
+    setEditingProduct(p);
     setIsFormModalOpen(true);
   };
 
-  const handleAdjustStockClick = (prod?: Product) => {
-    setAdjustTargetProduct(prod || null);
+  const handleAdjustStockClick = (p: Product) => {
+    setAdjustTargetProduct(p);
     setIsAdjustModalOpen(true);
   };
 
-  const handleViewDetailsClick = (prod: Product) => {
-    setSelectedProductForDetail(prod);
+  const handleViewDetailsClick = (p: Product) => {
+    setSelectedProductForDetail(p);
     setIsDetailDrawerOpen(true);
   };
 
-  const handleSaveProduct = async (data: CreateProductInput | UpdateProductInput) => {
+  const handleSaveProduct = async (input: CreateProductInput | UpdateProductInput) => {
     if (editingProduct) {
-      const updated = await inventoryService.updateProduct(editingProduct.id, data);
-      setProducts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-      if (selectedProductForDetail?.id === updated.id) {
-        setSelectedProductForDetail(updated);
-      }
+      await inventoryService.updateProduct(editingProduct.id, input);
     } else {
-      const created = await inventoryService.createProduct(data as CreateProductInput);
-      setProducts((prev) => [created, ...prev]);
+      await inventoryService.createProduct(input as CreateProductInput);
     }
+    loadProducts();
   };
 
   const handleStockAdjustmentSuccess = () => {
     loadProducts();
+    if (selectedProductForDetail) {
+      // Refresh detail view
+      inventoryService.getProductById(selectedProductForDetail.id).then((p) => {
+        if (p) setSelectedProductForDetail(p);
+      });
+    }
   };
 
-  // Metrics for header summary chips
-  const totalCount = products.length;
+  // Metrics
+  const totalProductsCount = products.length;
   const lowStockCount = products.filter(
     (p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold
   ).length;
@@ -143,40 +144,30 @@ export const InventoryPage: React.FC = () => {
     <div className="space-y-6">
       {/* Page Header */}
       <PageHeader
-        title="Inventory Management"
-        subtitle="Manage product catalog, stock counts, pricing, and atomic stock adjustments."
+        title="Products & Stock Catalog"
+        subtitle="Manage spare parts, accessories, stock counts, category thresholds, and inventory movements."
         actions={
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleAdjustStockClick()}
-              className="flex items-center space-x-1.5 text-xs pressable"
-            >
-              <Sliders className="h-4 w-4 shrink-0 text-primary" />
-              <span>Adjust Stock</span>
-            </Button>
-
-            <Button
-              onClick={handleAddProductClick}
-              size="sm"
-              className="flex items-center space-x-1.5 text-xs pressable"
-            >
-              <PackagePlus className="h-4 w-4 shrink-0" />
-              <span>Add Product</span>
-            </Button>
-          </div>
+          <Button
+            onClick={handleAddProductClick}
+            size="sm"
+            className="flex items-center space-x-1.5 text-xs pressable"
+          >
+            <PackagePlus className="h-4 w-4 shrink-0" />
+            <span>Add New Product</span>
+          </Button>
         }
       />
 
-      {/* Catalog KPI Metric Chips */}
+      {/* KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Total Listed SKUs
+              Active Catalog Items
             </span>
-            <span className="text-xl font-bold font-mono text-foreground">{totalCount} Items</span>
+            <span className="text-xl font-bold font-mono text-foreground">
+              {totalProductsCount} Products
+            </span>
           </div>
           <div className="p-2 rounded-lg bg-primary/10 text-primary">
             <Package className="w-5 h-5" />
@@ -186,13 +177,13 @@ export const InventoryPage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Low Stock Alerts
+              Low Stock Items
             </span>
-            <span className="text-xl font-bold font-mono text-amber-600 dark:text-amber-400">
-              {lowStockCount} Re-orders
+            <span className="text-xl font-bold font-mono text-amber-500">
+              {lowStockCount} Items
             </span>
           </div>
-          <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
             <AlertTriangle className="w-5 h-5" />
           </div>
         </div>
@@ -200,10 +191,10 @@ export const InventoryPage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Out of Stock SKUs
+              Out of Stock Items
             </span>
             <span className="text-xl font-bold font-mono text-destructive">
-              {outOfStockCount} Zero Stock
+              {outOfStockCount} Items
             </span>
           </div>
           <div className="p-2 rounded-lg bg-destructive/10 text-destructive">
@@ -214,13 +205,12 @@ export const InventoryPage: React.FC = () => {
 
       {/* Search & Filters Bar */}
       <div className="p-4 rounded-xl bg-card border border-border space-y-3 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          {/* Search Input */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search by product name or SKU code..."
+              placeholder="Search by product name or SKU / product code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full text-xs pl-9 pr-8 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
@@ -235,69 +225,68 @@ export const InventoryPage: React.FC = () => {
             )}
           </div>
 
-          {/* Category & Brand Dropdowns */}
-          <div className="flex items-center space-x-2">
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-            >
-              <option value="ALL">All Categories</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={selectedBrand}
-              onChange={(e) => setSelectedBrand(e.target.value)}
-              className="text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
-            >
-              <option value="ALL">All Brands</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-
+          <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs text-muted-foreground">
+            <span className="font-mono font-medium">{products.length} Products</span>
             <Button
               variant="ghost"
               size="sm"
               onClick={loadProducts}
               disabled={isLoading}
-              className="h-8 px-2 text-xs pressable"
-              title="Refresh Catalog"
+              className="h-8 px-2.5 text-xs pressable"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-primary' : ''}`} />
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-primary' : ''}`}
+              />
             </Button>
           </div>
         </div>
 
-        {/* Stock Status Filter Chips */}
-        <div className="flex items-center space-x-2 pt-1 border-t border-border/60 text-xs">
+        {/* Filter Dropdowns Bar */}
+        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border/60 text-xs">
           <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Status:
+            <Filter className="w-3 h-3" /> Filters:
           </span>
-          {(['ALL', 'IN_STOCK', 'LOW_STOCK', 'OUT_OF_STOCK'] as const).map((st) => (
-            <button
-              key={st}
-              onClick={() => setStockStatusFilter(st)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all pressable ${
-                stockStatusFilter === st
-                  ? 'bg-primary text-primary-foreground shadow-2xs'
-                  : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-              }`}
-            >
-              {st.replace(/_/g, ' ')}
-            </button>
-          ))}
+
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          >
+            <option value="ALL">All Categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={selectedBrand}
+            onChange={(e) => setSelectedBrand(e.target.value)}
+            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          >
+            <option value="ALL">All Brands</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={stockStatusFilter}
+            onChange={(e) => setStockStatusFilter(e.target.value as any)}
+            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          >
+            <option value="ALL">All Stock Statuses</option>
+            <option value="IN_STOCK">In Stock</option>
+            <option value="LOW_STOCK">Low Stock</option>
+            <option value="OUT_OF_STOCK">Out of Stock</option>
+          </select>
         </div>
       </div>
 
-      {/* Product Catalog Body */}
+      {/* Main Table Content */}
       {error ? (
         <div className="p-6 rounded-xl bg-destructive/10 border border-destructive/20 text-center text-xs text-destructive space-y-2">
           <AlertCircle className="w-6 h-6 mx-auto" />
@@ -311,7 +300,6 @@ export const InventoryPage: React.FC = () => {
           <SkeletonPlaceholder className="h-12 w-full rounded-xl" />
           <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
           <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
-          <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
         </div>
       ) : products.length === 0 ? (
         <div className="py-16 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40 flex flex-col items-center gap-2">
@@ -319,14 +307,14 @@ export const InventoryPage: React.FC = () => {
             <Package className="w-8 h-8" />
           </div>
           <h3 className="text-sm font-bold text-foreground">
-            {searchQuery || stockStatusFilter !== 'ALL' || selectedCategory !== 'ALL'
-              ? 'No matching products found'
-              : 'No products in catalog yet'}
+            {searchQuery || selectedCategory !== 'ALL' || selectedBrand !== 'ALL'
+              ? 'No matching catalog products found'
+              : 'No products in inventory catalog yet'}
           </h3>
           <p className="text-xs text-muted-foreground max-w-sm">
-            {searchQuery || stockStatusFilter !== 'ALL'
-              ? 'Try adjusting your search filters or clearing the search query.'
-              : 'Add your first electronics product or spare part to start managing inventory stock.'}
+            {searchQuery || selectedCategory !== 'ALL' || selectedBrand !== 'ALL'
+              ? 'Try adjusting your search filters or clearing dropdown selections.'
+              : 'Add your first product, spare part, or accessory to begin managing inventory.'}
           </p>
           {!searchQuery && stockStatusFilter === 'ALL' && (
             <Button onClick={handleAddProductClick} size="sm" className="mt-2 text-xs pressable">
@@ -352,6 +340,8 @@ export const InventoryPage: React.FC = () => {
         brands={brands}
         onClose={() => setIsFormModalOpen(false)}
         onSave={handleSaveProduct}
+        onCategoryCreated={(newCat) => setCategories((prev) => [...prev, newCat])}
+        onBrandCreated={(newBrand) => setBrands((prev) => [...prev, newBrand])}
       />
 
       {/* Stock Adjustment RPC Modal */}

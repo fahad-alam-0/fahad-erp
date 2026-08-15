@@ -119,6 +119,34 @@ export const inventoryService = {
     return data || [];
   },
 
+  async createCategory(name: string): Promise<Category> {
+    const { data, error } = await supabase
+      .from('categories')
+      .insert({ name: name.trim(), is_active: true })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating category:', error);
+      throw new Error(error.message || 'Failed to create category.');
+    }
+    return data;
+  },
+
+  async createBrand(name: string): Promise<Brand> {
+    const { data, error } = await supabase
+      .from('brands')
+      .insert({ name: name.trim(), is_active: true })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating brand:', error);
+      throw new Error(error.message || 'Failed to create brand.');
+    }
+    return data;
+  },
+
   async createProduct(input: CreateProductInput): Promise<Product> {
     const payload = {
       name: input.name.trim(),

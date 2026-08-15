@@ -3,6 +3,8 @@ import { CartItem, CreateSalePaymentInput } from '../types/sales.types';
 import { Product } from '@/features/inventory-management/types/inventory.types';
 import { Customer } from '@/features/customer-management/types/customer.types';
 import { salesService } from '../services/salesService';
+import { customerService } from '@/features/customer-management/services/customerService';
+import { SearchableCombobox, ComboboxOption } from '@/components/ui/SearchableCombobox';
 import { formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { PosPaymentModal } from './PosPaymentModal';
@@ -19,7 +21,6 @@ import {
   X,
   CreditCard,
   AlertCircle,
-  UserCheck,
 } from 'lucide-react';
 
 export const PosTerminal: React.FC = () => {
@@ -31,11 +32,8 @@ export const PosTerminal: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Customer Selection State
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [customerResults, setCustomerResults] = useState<Customer[]>([]);
-  const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
-  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
 
   // Cart & Pricing State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -55,6 +53,19 @@ export const PosTerminal: React.FC = () => {
     }, 250);
     return () => clearTimeout(handler);
   }, [productSearch]);
+
+  // Load Customers list
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const data = await customerService.getCustomers();
+        setAllCustomers(data);
+      } catch (err) {
+        console.error('POS customer list load error:', err);
+      }
+    };
+    loadCustomers();
+  }, []);
 
   // Fetch product catalog
   const loadProducts = async (q?: string) => {
@@ -85,22 +96,10 @@ export const PosTerminal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Customer search
-  const handleCustomerSearchChange = async (q: string) => {
-    setCustomerSearch(q);
-    if (!q.trim()) {
-      setCustomerResults([]);
-      return;
-    }
-    try {
-      setIsSearchingCustomers(true);
-      const data = await salesService.searchCustomers(q);
-      setCustomerResults(data);
-    } catch (err) {
-      console.error('POS customer search error:', err);
-    } finally {
-      setIsSearchingCustomers(false);
-    }
+  const handleCreateCustomer = async (fullName: string) => {
+    const created = await customerService.createCustomer({ full_name: fullName, phone: 'N/A' });
+    setAllCustomers((prev) => [...prev, created]);
+    return { id: created.id, name: created.full_name };
   };
 
   // Cart Actions
@@ -182,9 +181,11 @@ export const PosTerminal: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
+  const selectedCustomerObj = allCustomers.find((c) => c.id === selectedCustomerId);
+
   const handleCompleteSaleCheckout = async (payments: CreateSalePaymentInput[]) => {
     const res = await salesService.createSale({
-      customer_id: selectedCustomer?.id || null,
+      customer_id: selectedCustomerId || null,
       discount: discountNum,
       notes: notes.trim() || undefined,
       items: cart.map((item) => ({
@@ -197,7 +198,7 @@ export const PosTerminal: React.FC = () => {
     setIsPaymentModalOpen(false);
     setReceiptInfo({
       ...res,
-      customer_name: selectedCustomer?.full_name || 'Walk-in Customer',
+      customer_name: selectedCustomerObj?.full_name || 'Walk-in Customer',
     });
     setIsReceiptModalOpen(true);
 
@@ -205,7 +206,7 @@ export const PosTerminal: React.FC = () => {
     setCart([]);
     setDiscount('0');
     setNotes('');
-    setSelectedCustomer(null);
+    setSelectedCustomerId('');
     loadProducts(debouncedProdSearch);
   };
 
@@ -214,6 +215,12 @@ export const PosTerminal: React.FC = () => {
     if (p.stock_quantity <= p.low_stock_threshold) return 'LOW_STOCK';
     return 'IN_STOCK';
   };
+
+  const customerOptions: ComboboxOption[] = allCustomers.map((c) => ({
+    id: c.id,
+    name: c.full_name,
+    subtitle: c.phone ? `Ph: ${c.phone}` : undefined,
+  }));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -307,70 +314,18 @@ export const PosTerminal: React.FC = () => {
               <User className="w-3.5 h-3.5 text-primary" />
               <span>Customer Assignment</span>
             </span>
-            <button
-              type="button"
-              onClick={() => setShowCustomerPicker(!showCustomerPicker)}
-              className="text-[11px] font-semibold text-primary hover:underline"
-            >
-              {selectedCustomer ? 'Change Customer' : 'Assign Customer'}
-            </button>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-muted/40 border border-border flex items-center justify-between text-xs">
-            {selectedCustomer ? (
-              <div className="flex items-center space-x-2">
-                <UserCheck className="w-4 h-4 text-emerald-500 shrink-0" />
-                <div>
-                  <p className="font-bold text-foreground">{selectedCustomer.full_name}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">{selectedCustomer.phone}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2 text-muted-foreground font-medium">
-                <User className="w-4 h-4 shrink-0" />
-                <span>Walk-in Customer (Default)</span>
-              </div>
-            )}
-
-            {selectedCustomer && (
-              <button
-                onClick={() => setSelectedCustomer(null)}
-                className="text-muted-foreground hover:text-foreground p-1 rounded"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Customer Search Dropdown */}
-          {showCustomerPicker && (
-            <div className="p-3 bg-muted/30 border border-border rounded-lg space-y-2 text-xs">
-              <input
-                type="text"
-                placeholder="Type customer name or phone..."
-                value={customerSearch}
-                onChange={(e) => handleCustomerSearchChange(e.target.value)}
-                className="w-full text-xs px-3 py-1.5 bg-background border border-input rounded focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-              />
-              <div className="max-h-36 overflow-y-auto space-y-1">
-                {isSearchingCustomers ? (
-                  <p className="text-[11px] text-muted-foreground p-1">Searching...</p>
-                ) : customerResults.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => {
-                      setSelectedCustomer(c);
-                      setShowCustomerPicker(false);
-                    }}
-                    className="p-1.5 rounded hover:bg-card cursor-pointer flex justify-between items-center text-xs"
-                  >
-                    <span className="font-semibold text-foreground">{c.full_name}</span>
-                    <span className="font-mono text-muted-foreground text-[11px]">{c.phone}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <SearchableCombobox
+            options={customerOptions}
+            value={selectedCustomerId}
+            onChange={setSelectedCustomerId}
+            placeholder="Walk-in Customer (Default)..."
+            searchPlaceholder="Search or create customer..."
+            allowClear
+            clearLabel="Walk-in Customer (Default)"
+            onCreateNew={handleCreateCustomer}
+          />
         </div>
 
         {/* Error Alert */}

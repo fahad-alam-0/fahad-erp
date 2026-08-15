@@ -14,7 +14,7 @@ export const repairService = {
   }): Promise<RepairJob[]> {
     let req = supabase
       .from('repair_jobs')
-      .select('*, customer:customers(full_name, phone), technician:profiles!repair_jobs_technician_id_fkey(full_name, email, role)')
+      .select('*, customer:customers(full_name, phone), technician:profiles!repair_jobs_technician_id_fkey(full_name, phone, role)')
       .order('received_at', { ascending: false });
 
     // Technician role guard: Technicians only get assigned jobs if logged in as TECH
@@ -58,7 +58,7 @@ export const repairService = {
   async getRepairJobById(id: string, userRole?: string): Promise<RepairJob | null> {
     const { data: jobData, error: jobError } = await supabase
       .from('repair_jobs')
-      .select('*, customer:customers(full_name, phone, address), technician:profiles!repair_jobs_technician_id_fkey(full_name, email, role)')
+      .select('*, customer:customers(full_name, phone, address), technician:profiles!repair_jobs_technician_id_fkey(full_name, phone, role)')
       .eq('id', id)
       .single();
 
