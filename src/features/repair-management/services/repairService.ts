@@ -143,6 +143,61 @@ export const repairService = {
     return data || [];
   },
 
+  async getTechnicianRoster(): Promise<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    role: string;
+    is_active: boolean;
+    active_repairs_count: number;
+    completed_this_month_count: number;
+  }[]> {
+    const { data: techProfiles, error: profileErr } = await supabase
+      .from('profiles')
+      .select('id, full_name, phone, role, is_active')
+      .in('role', ['TECHNICIAN', 'OWNER'])
+      .order('full_name', { ascending: true });
+
+    if (profileErr) {
+      console.error('Error fetching technician profiles for roster:', profileErr);
+      throw new Error(profileErr.message || 'Failed to fetch technician roster.');
+    }
+
+    const { data: jobs, error: jobsErr } = await supabase
+      .from('repair_jobs')
+      .select('id, technician_id, status, received_at, updated_at');
+
+    if (jobsErr) {
+      console.error('Error fetching repair jobs metrics for roster:', jobsErr);
+    }
+
+    const allJobs = jobs || [];
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    return (techProfiles || []).map((t) => {
+      const tJobs = allJobs.filter((j) => j.technician_id === t.id);
+      const activeCount = tJobs.filter((j) => j.status !== 'DELIVERED' && j.status !== 'CANCELLED').length;
+
+      const completedThisMonth = tJobs.filter((j) => {
+        if (j.status !== 'DELIVERED') return false;
+        const d = new Date(j.updated_at || j.received_at);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      }).length;
+
+      return {
+        id: t.id,
+        full_name: t.full_name,
+        phone: t.phone || null,
+        role: t.role,
+        is_active: t.is_active,
+        active_repairs_count: activeCount,
+        completed_this_month_count: completedThisMonth,
+      };
+    });
+  },
+
   async createRepairJob(input: CreateRepairJobInput): Promise<{
     repair_id: string;
     job_number: string;
