@@ -5,13 +5,13 @@ import { dashboardService } from '../services/dashboardService';
 import { DashboardData } from '../types/dashboard.types';
 
 export const useDashboardData = () => {
-  const { user, role } = useAuthStore();
+  const { user, role, isInitialized, isAuthenticated } = useAuthStore();
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMetrics = useCallback(async () => {
-    if (!user || !role) {
+    if (!isInitialized || !isAuthenticated || !user || !role) {
       setIsLoading(false);
       return;
     }
@@ -36,7 +36,7 @@ export const useDashboardData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [user, role]);
+  }, [isInitialized, isAuthenticated, user, role]);
 
   useEffect(() => {
     fetchMetrics();
@@ -44,7 +44,7 @@ export const useDashboardData = () => {
 
   return {
     data,
-    isLoading,
+    isLoading: isLoading || !isInitialized,
     error,
     refetch: fetchMetrics,
     role,

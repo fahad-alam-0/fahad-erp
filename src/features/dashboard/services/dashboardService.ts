@@ -26,6 +26,11 @@ export const dashboardService = {
       .select('total_amount')
       .gte('created_at', todayStart);
 
+    if (salesRes.error) {
+      console.error('Error fetching today sales metrics:', salesRes.error);
+      throw new Error(`Failed to fetch today sales metrics: ${salesRes.error.message}`);
+    }
+
     const todaySalesTotal = (salesRes.data || []).reduce(
       (sum, item) => sum + Number(item.total_amount || 0),
       0
@@ -36,6 +41,11 @@ export const dashboardService = {
       .from('purchases')
       .select('total_amount')
       .gte('created_at', todayStart);
+
+    if (purchasesRes.error) {
+      console.error('Error fetching today purchases metrics:', purchasesRes.error);
+      throw new Error(`Failed to fetch today purchases metrics: ${purchasesRes.error.message}`);
+    }
 
     const todayPurchasesTotal = (purchasesRes.data || []).reduce(
       (sum, item) => sum + Number(item.total_amount || 0),
@@ -48,19 +58,34 @@ export const dashboardService = {
       .select('*', { count: 'exact', head: true })
       .not('status', 'in', '("DELIVERED","CANCELLED")');
 
+    if (activeRepairsRes.error) {
+      console.error('Error fetching active repairs count:', activeRepairsRes.error);
+      throw new Error(`Failed to fetch active repairs count: ${activeRepairsRes.error.message}`);
+    }
+
     // 4. Ready Repairs Count
     const readyRepairsRes = await supabase
       .from('repair_jobs')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'READY_FOR_PICKUP');
 
-    // 5. Low Stock Products (stock_quantity <= low_stock_threshold)
+    if (readyRepairsRes.error) {
+      console.error('Error fetching ready repairs count:', readyRepairsRes.error);
+      throw new Error(`Failed to fetch ready repairs count: ${readyRepairsRes.error.message}`);
+    }
+
+    // 5. Low Stock Products
     const lowStockRes = await supabase
       .from('products')
       .select('id, name, product_code, stock_quantity, low_stock_threshold, unit, selling_price')
       .eq('is_active', true)
       .order('stock_quantity', { ascending: true })
       .limit(100);
+
+    if (lowStockRes.error) {
+      console.error('Error fetching low stock products:', lowStockRes.error);
+      throw new Error(`Failed to fetch low stock products: ${lowStockRes.error.message}`);
+    }
 
     const lowStockProducts: LowStockProductItem[] = (lowStockRes.data || [])
       .filter((p: any) => Number(p.stock_quantity || 0) <= Number(p.low_stock_threshold || 0))
@@ -75,28 +100,38 @@ export const dashboardService = {
         selling_price: Number(p.selling_price || 0),
       }));
 
-    // 6. Recent Sales
+    // 6. Recent Sales (Corrected: query payment_status instead of non-existent sales.payment_method, with !left join on customers for walk-in sales)
     const recentSalesRes = await supabase
       .from('sales')
-      .select('id, sale_number, total_amount, payment_method, created_at, customer:customers(full_name)')
+      .select('id, sale_number, total_amount, payment_status, created_at, customer:customers!left(full_name)')
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentSalesRes.error) {
+      console.error('Error fetching recent sales:', recentSalesRes.error);
+      throw new Error(`Failed to fetch recent sales list: ${recentSalesRes.error.message}`);
+    }
 
     const recentSales: RecentSaleItem[] = (recentSalesRes.data || []).map((s: any) => ({
       id: s.id,
       sale_number: s.sale_number,
       customer_name: s.customer?.full_name || 'Walk-in Customer',
       total_amount: Number(s.total_amount || 0),
-      payment_method: s.payment_method,
+      payment_method: s.payment_status || 'PAID',
       created_at: s.created_at,
     }));
 
-    // 7. Recent Repairs
+    // 7. Recent Repairs (Explicit !left joins on customers and profiles to preserve unassigned repairs)
     const recentRepairsRes = await supabase
       .from('repair_jobs')
-      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, total_amount, created_at, customer:customers(full_name), technician:profiles!repair_jobs_technician_id_fkey(full_name)')
+      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, service_revenue, created_at, customer:customers!left(full_name), technician:profiles!repair_jobs_technician_id_fkey!left(full_name)')
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentRepairsRes.error) {
+      console.error('Error fetching recent repair jobs:', recentRepairsRes.error);
+      throw new Error(`Failed to fetch recent repair jobs list: ${recentRepairsRes.error.message}`);
+    }
 
     const recentRepairs: RecentRepairItem[] = (recentRepairsRes.data || []).map((r: any) => ({
       id: r.id,
@@ -108,14 +143,19 @@ export const dashboardService = {
       technician_name: r.technician?.full_name || 'Unassigned',
       status: r.status,
       quoted_amount: Number(r.quoted_amount || 0),
-      total_amount: Number(r.total_amount || 0),
+      total_amount: Number(r.service_revenue || r.quoted_amount || 0),
       created_at: r.created_at,
     }));
 
     // 8. Technician Earnings Summary
     const snapshotsRes = await supabase
       .from('repair_profit_snapshots')
-      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey(full_name)');
+      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)');
+
+    if (snapshotsRes.error) {
+      console.error('Error fetching technician profit snapshots:', snapshotsRes.error);
+      throw new Error(`Failed to fetch technician profit snapshots: ${snapshotsRes.error.message}`);
+    }
 
     const techMap = new Map<string, { name: string; jobs: number; total: number }>();
     (snapshotsRes.data || []).forEach((snap: any) => {
@@ -157,12 +197,20 @@ export const dashboardService = {
       .eq('technician_id', userId)
       .not('status', 'in', '("DELIVERED","CANCELLED")');
 
+    if (activeRes.error) {
+      throw new Error(`Failed to fetch technician active repairs count: ${activeRes.error.message}`);
+    }
+
     // 2. My Ready Repairs
     const readyRes = await supabase
       .from('repair_jobs')
       .select('*', { count: 'exact', head: true })
       .eq('technician_id', userId)
       .eq('status', 'READY_FOR_PICKUP');
+
+    if (readyRes.error) {
+      throw new Error(`Failed to fetch technician ready repairs count: ${readyRes.error.message}`);
+    }
 
     // 3. My Completed Repairs
     const completedRes = await supabase
@@ -171,11 +219,19 @@ export const dashboardService = {
       .eq('technician_id', userId)
       .eq('status', 'DELIVERED');
 
+    if (completedRes.error) {
+      throw new Error(`Failed to fetch technician completed repairs count: ${completedRes.error.message}`);
+    }
+
     // 4. My Earnings
     const earningsRes = await supabase
       .from('repair_profit_snapshots')
       .select('technician_share')
       .eq('technician_id', userId);
+
+    if (earningsRes.error) {
+      throw new Error(`Failed to fetch technician profit share: ${earningsRes.error.message}`);
+    }
 
     const myEarningsTotal = (earningsRes.data || []).reduce(
       (sum, item) => sum + Number(item.technician_share || 0),
@@ -185,10 +241,14 @@ export const dashboardService = {
     // 5. My Recent Repairs
     const recentRepairsRes = await supabase
       .from('repair_jobs')
-      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, total_amount, created_at, customer:customers(full_name)')
+      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, service_revenue, created_at, customer:customers!left(full_name)')
       .eq('technician_id', userId)
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentRepairsRes.error) {
+      throw new Error(`Failed to fetch technician recent repairs: ${recentRepairsRes.error.message}`);
+    }
 
     const myRecentRepairs: RecentRepairItem[] = (recentRepairsRes.data || []).map((r: any) => ({
       id: r.id,
@@ -199,7 +259,7 @@ export const dashboardService = {
       reported_problem: r.reported_problem,
       status: r.status,
       quoted_amount: Number(r.quoted_amount || 0),
-      total_amount: Number(r.total_amount || 0),
+      total_amount: Number(r.service_revenue || r.quoted_amount || 0),
       created_at: r.created_at,
     }));
 
@@ -221,6 +281,10 @@ export const dashboardService = {
       .select('total_amount')
       .gte('created_at', todayStart);
 
+    if (salesRes.error) {
+      throw new Error(`Failed to fetch staff today sales: ${salesRes.error.message}`);
+    }
+
     const todaySalesTotal = (salesRes.data || []).reduce(
       (sum, item) => sum + Number(item.total_amount || 0),
       0
@@ -231,6 +295,10 @@ export const dashboardService = {
       .from('purchases')
       .select('total_amount')
       .gte('created_at', todayStart);
+
+    if (purchasesRes.error) {
+      throw new Error(`Failed to fetch staff today purchases: ${purchasesRes.error.message}`);
+    }
 
     const todayPurchasesTotal = (purchasesRes.data || []).reduce(
       (sum, item) => sum + Number(item.total_amount || 0),
@@ -243,19 +311,31 @@ export const dashboardService = {
       .select('*', { count: 'exact', head: true })
       .not('status', 'in', '("DELIVERED","CANCELLED")');
 
+    if (activeRepairsRes.error) {
+      throw new Error(`Failed to fetch staff active repairs count: ${activeRepairsRes.error.message}`);
+    }
+
     // 4. Ready Repairs Count
     const readyRepairsRes = await supabase
       .from('repair_jobs')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'READY_FOR_PICKUP');
 
-    // 5. Low Stock Products (stock_quantity <= low_stock_threshold)
+    if (readyRepairsRes.error) {
+      throw new Error(`Failed to fetch staff ready repairs count: ${readyRepairsRes.error.message}`);
+    }
+
+    // 5. Low Stock Products
     const lowStockRes = await supabase
       .from('products')
       .select('id, name, product_code, stock_quantity, low_stock_threshold, unit, selling_price')
       .eq('is_active', true)
       .order('stock_quantity', { ascending: true })
       .limit(100);
+
+    if (lowStockRes.error) {
+      throw new Error(`Failed to fetch staff low stock products: ${lowStockRes.error.message}`);
+    }
 
     const lowStockProducts: LowStockProductItem[] = (lowStockRes.data || [])
       .filter((p: any) => Number(p.stock_quantity || 0) <= Number(p.low_stock_threshold || 0))
@@ -273,25 +353,33 @@ export const dashboardService = {
     // 6. Recent Sales
     const recentSalesRes = await supabase
       .from('sales')
-      .select('id, sale_number, total_amount, payment_method, created_at, customer:customers(full_name)')
+      .select('id, sale_number, total_amount, payment_status, created_at, customer:customers!left(full_name)')
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentSalesRes.error) {
+      throw new Error(`Failed to fetch staff recent sales: ${recentSalesRes.error.message}`);
+    }
 
     const recentSales: RecentSaleItem[] = (recentSalesRes.data || []).map((s: any) => ({
       id: s.id,
       sale_number: s.sale_number,
       customer_name: s.customer?.full_name || 'Walk-in Customer',
       total_amount: Number(s.total_amount || 0),
-      payment_method: s.payment_method,
+      payment_method: s.payment_status || 'PAID',
       created_at: s.created_at,
     }));
 
     // 7. Recent Repairs
     const recentRepairsRes = await supabase
       .from('repair_jobs')
-      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, total_amount, created_at, customer:customers(full_name)')
+      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, service_revenue, created_at, customer:customers!left(full_name)')
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentRepairsRes.error) {
+      throw new Error(`Failed to fetch staff recent repairs: ${recentRepairsRes.error.message}`);
+    }
 
     const recentRepairs: RecentRepairItem[] = (recentRepairsRes.data || []).map((r: any) => ({
       id: r.id,
@@ -302,16 +390,20 @@ export const dashboardService = {
       reported_problem: r.reported_problem,
       status: r.status,
       quoted_amount: Number(r.quoted_amount || 0),
-      total_amount: Number(r.total_amount || 0),
+      total_amount: Number(r.service_revenue || r.quoted_amount || 0),
       created_at: r.created_at,
     }));
 
     // 8. Recent Purchases
     const recentPurchasesRes = await supabase
       .from('purchases')
-      .select('id, purchase_number, total_amount, created_at, supplier:suppliers(name)')
+      .select('id, purchase_number, total_amount, created_at, supplier:suppliers!left(name)')
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (recentPurchasesRes.error) {
+      throw new Error(`Failed to fetch staff recent purchases: ${recentPurchasesRes.error.message}`);
+    }
 
     const recentPurchases: RecentPurchaseItem[] = (recentPurchasesRes.data || []).map((p: any) => ({
       id: p.id,

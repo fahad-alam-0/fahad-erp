@@ -89,6 +89,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
 
   const partsTotalCost = (displayJob.repair_parts || []).reduce((sum, p) => sum + p.total_cost, 0);
   const paymentsTotalAmount = (displayJob.repair_payments || []).reduce((sum, p) => sum + p.amount, 0);
+  const remainingDueAmount = Math.max(0, displayJob.service_revenue - paymentsTotalAmount);
 
   const handleClaimClick = async () => {
     if (isStaff) return;
@@ -168,6 +169,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
+            {/* Update Status Button (Assigned worker or Owner) */}
             {!isTerminal && !isFinalized && (isOwner || isAssignedToMe) && (
               <Button
                 size="sm"
@@ -180,6 +182,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
+            {/* Assign Tech (Owner only) */}
             {isOwner && !isTerminal && !isFinalized && (
               <Button
                 size="sm"
@@ -192,28 +195,29 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
+            {/* Add Part Button (Assigned worker or Owner) */}
             {!isTerminal && !isFinalized && (isOwner || isAssignedToMe) && (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsPartModalOpen(true)}
-                  className="h-8 text-xs pressable flex items-center gap-1.5"
-                >
-                  <Plus className="w-3.5 h-3.5 text-primary" />
-                  <span>Add Part</span>
-                </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsPartModalOpen(true)}
+                className="h-8 text-xs pressable flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5 text-primary" />
+                <span>Add Part</span>
+              </Button>
+            )}
 
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="h-8 text-xs pressable flex items-center gap-1.5"
-                >
-                  <Banknote className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Record Payment</span>
-                </Button>
-              </>
+            {/* Collect / Record Payment (Available to STAFF, OWNER, and Assigned TECH on non-terminal, unfinalized tickets) */}
+            {!isTerminal && !isFinalized && (isOwner || isStaff || isAssignedToMe) && remainingDueAmount > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="h-8 text-xs font-bold pressable flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Banknote className="w-3.5 h-3.5" />
+                <span>{isStaff ? 'Collect Payment' : 'Record Payment'}</span>
+              </Button>
             )}
           </div>
 
