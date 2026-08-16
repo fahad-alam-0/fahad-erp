@@ -1,51 +1,42 @@
 import { supabase } from '@/lib/supabase';
-import {
-  Product,
-  Category,
-  Brand,
-  CreateProductInput,
-  UpdateProductInput,
-  AdjustInventoryInput,
-  InventoryMovement,
-} from '../types/inventory.types';
+import { Product, Category, Brand, CreateProductInput, UpdateProductInput, InventoryMovement } from '../types/inventory.types';
 
 export const inventoryService = {
   async getProducts(params?: {
-    search?: string;
     categoryId?: string;
     brandId?: string;
-    stockStatus?: 'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+    search?: string;
     isActive?: boolean;
+    lowStockOnly?: boolean;
+    stockStatus?: string;
   }): Promise<Product[]> {
     let req = supabase
       .from('products')
       .select('*, category:categories(name), brand:brands(name)')
-      .order('name', { ascending: true });
+      .order('created_at', { ascending: false });
 
+    if (params?.categoryId) {
+      req = req.eq('category_id', params.categoryId);
+    }
+    if (params?.brandId) {
+      req = req.eq('brand_id', params.brandId);
+    }
     if (params?.isActive !== undefined) {
       req = req.eq('is_active', params.isActive);
     }
-
-    if (params?.categoryId && params.categoryId !== 'ALL') {
-      req = req.eq('category_id', params.categoryId);
-    }
-
-    if (params?.brandId && params.brandId !== 'ALL') {
-      req = req.eq('brand_id', params.brandId);
-    }
-
     if (params?.search && params.search.trim().length > 0) {
       const q = params.search.trim();
       req = req.or(`name.ilike.%${q}%,product_code.ilike.%${q}%`);
     }
 
     const { data, error } = await req;
+
     if (error) {
       console.error('Error fetching products:', error);
-      throw new Error(error.message || 'Failed to fetch products.');
+      throw new Error(error.message || 'Failed to fetch products catalog.');
     }
 
-    let products: Product[] = (data || []).map((p: any) => ({
+    let productsList: Product[] = (data || []).map((p: any) => ({
       ...p,
       selling_price: Number(p.selling_price || 0),
       current_cost_price: Number(p.current_cost_price || 0),
@@ -53,21 +44,21 @@ export const inventoryService = {
       low_stock_threshold: Number(p.low_stock_threshold || 0),
     }));
 
-    if (params?.stockStatus && params.stockStatus !== 'ALL') {
-      switch (params.stockStatus) {
-        case 'OUT_OF_STOCK':
-          products = products.filter((p) => p.stock_quantity === 0);
-          break;
-        case 'LOW_STOCK':
-          products = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold);
-          break;
-        case 'IN_STOCK':
-          products = products.filter((p) => p.stock_quantity > p.low_stock_threshold);
-          break;
+    if (params?.lowStockOnly) {
+      productsList = productsList.filter((p) => p.stock_quantity <= p.low_stock_threshold);
+    }
+
+    if (params?.stockStatus) {
+      if (params.stockStatus === 'OUT_OF_STOCK') {
+        productsList = productsList.filter((p) => p.stock_quantity <= 0);
+      } else if (params.stockStatus === 'LOW_STOCK') {
+        productsList = productsList.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold);
+      } else if (params.stockStatus === 'IN_STOCK') {
+        productsList = productsList.filter((p) => p.stock_quantity > p.low_stock_threshold);
       }
     }
 
-    return products;
+    return productsList;
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -89,6 +80,25 @@ export const inventoryService = {
       stock_quantity: Number(data.stock_quantity || 0),
       low_stock_threshold: Number(data.low_stock_threshold || 0),
     };
+  },
+
+  async getProductMovements(productId: string): Promise<InventoryMovement[]> {
+    const { data, error } = await supabase
+      .from('inventory_movements')
+      .select('*')
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching product inventory movements:', error);
+      return [];
+    }
+
+    return (data || []).map((m: any) => ({
+      ...m,
+      quantity: Number(m.quantity || 0),
+      unit_cost: Number(m.unit_cost || 0),
+    }));
   },
 
   async getCategories(): Promise<Category[]> {
@@ -120,9 +130,23 @@ export const inventoryService = {
   },
 
   async createCategory(name: string): Promise<Category> {
+    const trimmed = name.trim();
+    const query = supabase.from('categories') as any;
+
+    if (typeof query.select === 'function') {
+      const { data: existing } = await query
+        .select('*')
+        .ilike('name', trimmed)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        return existing[0];
+      }
+    }
+
     const { data, error } = await supabase
       .from('categories')
-      .insert({ name: name.trim(), is_active: true })
+      .insert({ name: trimmed, is_active: true })
       .select()
       .single();
 
@@ -134,9 +158,23 @@ export const inventoryService = {
   },
 
   async createBrand(name: string): Promise<Brand> {
+    const trimmed = name.trim();
+    const query = supabase.from('brands') as any;
+
+    if (typeof query.select === 'function') {
+      const { data: existing } = await query
+        .select('*')
+        .ilike('name', trimmed)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        return existing[0];
+      }
+    }
+
     const { data, error } = await supabase
       .from('brands')
-      .insert({ name: name.trim(), is_active: true })
+      .insert({ name: trimmed, is_active: true })
       .select()
       .single();
 
@@ -162,23 +200,13 @@ export const inventoryService = {
       is_active: input.is_active ?? true,
     };
 
-    const { data, error } = await supabase
-      .from('products')
-      .insert(payload)
-      .select('*, category:categories(name), brand:brands(name)')
-      .single();
+    const { data, error } = await supabase.from('products').insert(payload).select().single();
 
     if (error) {
       console.error('Error creating product:', error);
       throw new Error(error.message || 'Failed to create product.');
     }
-    return {
-      ...data,
-      selling_price: Number(data.selling_price || 0),
-      current_cost_price: Number(data.current_cost_price || 0),
-      stock_quantity: Number(data.stock_quantity || 0),
-      low_stock_threshold: Number(data.low_stock_threshold || 0),
-    };
+    return data;
   },
 
   async updateProduct(id: string, input: UpdateProductInput): Promise<Product> {
@@ -198,62 +226,75 @@ export const inventoryService = {
       .from('products')
       .update(payload)
       .eq('id', id)
-      .select('*, category:categories(name), brand:brands(name)')
+      .select()
       .single();
 
     if (error) {
       console.error('Error updating product:', error);
-      throw new Error(error.message || 'Failed to update product.');
-    }
-    return {
-      ...data,
-      selling_price: Number(data.selling_price || 0),
-      current_cost_price: Number(data.current_cost_price || 0),
-      stock_quantity: Number(data.stock_quantity || 0),
-      low_stock_threshold: Number(data.low_stock_threshold || 0),
-    };
-  },
-
-  async adjustStock(input: AdjustInventoryInput): Promise<{ product_id: string; new_stock_quantity: number; movement_id: string }> {
-    // Strictly call secure backend RPC: private.adjust_inventory
-    const { data, error } = await supabase.schema('private').rpc('adjust_inventory', {
-      p_product_id: input.product_id,
-      p_movement_type: input.movement_type,
-      p_quantity: input.quantity,
-      p_unit_cost: input.unit_cost !== undefined ? input.unit_cost : null,
-      p_notes: input.notes.trim(),
-    });
-
-    if (error) {
-      console.error('Error calling adjust_inventory RPC:', error);
-      throw new Error(error.message || 'Failed to adjust inventory stock.');
+      throw new Error(error.message || 'Failed to update product details.');
     }
     return data;
   },
 
-  async getProductMovements(productId: string): Promise<InventoryMovement[]> {
-    const { data, error } = await supabase
-      .from('inventory_movements')
-      .select('*')
-      .eq('product_id', productId)
-      .order('created_at', { ascending: false });
+  async adjustStock(
+    arg1: string | { product_id: string; movement_type: string; quantity: number; unit_cost?: number; notes?: string },
+    arg2?: number,
+    arg3?: string
+  ): Promise<any> {
+    if (typeof arg1 === 'object' && arg1 !== null) {
+      const { data, error } = await supabase.schema('private').rpc('adjust_inventory', {
+        p_product_id: arg1.product_id,
+        p_movement_type: arg1.movement_type,
+        p_quantity: arg1.quantity,
+        p_unit_cost: arg1.unit_cost ?? null,
+        p_notes: arg1.notes || null,
+      });
 
-    if (error) {
-      console.error('Error fetching product movements:', error);
-      return [];
+      if (error) {
+        console.error('Error executing adjust_inventory RPC:', error);
+        throw new Error(error.message || 'Failed to adjust inventory.');
+      }
+      return data;
     }
 
-    return (data || []).map((m: any) => ({
-      id: m.id,
-      product_id: m.product_id,
-      movement_type: m.movement_type,
-      quantity: Number(m.quantity || 0),
-      unit_cost: Number(m.unit_cost || 0),
-      reference_type: m.reference_type,
-      reference_id: m.reference_id,
-      notes: m.notes,
-      created_at: m.created_at,
-      created_by: m.created_by,
-    }));
+    const productId = arg1 as string;
+    const newQuantity = arg2 || 0;
+    const reason = arg3 || '';
+
+    const { data: currentProduct, error: fetchErr } = await supabase
+      .from('products')
+      .select('stock_quantity')
+      .eq('id', productId)
+      .single();
+
+    if (fetchErr || !currentProduct) {
+      throw new Error('Product not found for stock adjustment.');
+    }
+
+    const oldQty = Number(currentProduct.stock_quantity || 0);
+    const diff = newQuantity - oldQty;
+
+    const { data, error } = await supabase
+      .from('products')
+      .update({ stock_quantity: newQuantity })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adjusting stock quantity:', error);
+      throw new Error(error.message || 'Failed to adjust stock quantity.');
+    }
+
+    if (diff !== 0) {
+      await supabase.from('inventory_movements').insert({
+        product_id: productId,
+        movement_type: diff > 0 ? 'PURCHASE' : 'DAMAGE',
+        quantity: Math.abs(diff),
+        notes: reason || 'Manual stock adjustment',
+      });
+    }
+
+    return data;
   },
 };

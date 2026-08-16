@@ -7,6 +7,18 @@ import {
   CustomerRepairHistoryItem,
 } from '../types/customer.types';
 
+export const normalizePhone = (phone: string): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1);
+  }
+  return digits;
+};
+
 export const customerService = {
   async getCustomers(query?: string): Promise<Customer[]> {
     let req = supabase.from('customers').select('*').order('created_at', { ascending: false });
@@ -32,6 +44,32 @@ export const customerService = {
       throw new Error(error.message || 'Customer not found.');
     }
     return data;
+  },
+
+  async findOrCreateCustomer(input: { full_name: string; phone: string }): Promise<Customer> {
+    const rawName = input.full_name.trim();
+    const rawPhone = input.phone.trim();
+    const normPhone = normalizePhone(rawPhone);
+
+    // Fetch existing customers to check for duplicates
+    const { data: existingList } = await supabase.from('customers').select('*');
+    const existing = (existingList || []).find((c: any) => {
+      const matchPhone = normPhone && normalizePhone(c.phone || '') === normPhone;
+      const matchName = c.full_name.trim().toLowerCase() === rawName.toLowerCase();
+      return Boolean(matchPhone || matchName);
+    });
+
+    if (existing) {
+      // If existing customer found but phone needs updating
+      if (rawPhone && rawPhone !== 'N/A' && existing.phone !== rawPhone) {
+        await supabase.from('customers').update({ phone: rawPhone }).eq('id', existing.id);
+        existing.phone = rawPhone;
+      }
+      return existing;
+    }
+
+    // Create new customer
+    return this.createCustomer({ full_name: rawName, phone: rawPhone || 'N/A' });
   },
 
   async createCustomer(input: CreateCustomerInput): Promise<Customer> {
@@ -97,7 +135,6 @@ export const customerService = {
   },
 
   async getCustomerRepairHistory(customerId: string): Promise<CustomerRepairHistoryItem[]> {
-    // Outer left join on technician profile to include UNASSIGNED repairs (technician_id IS NULL)
     const { data: jobs, error: jobsErr } = await supabase
       .from('repair_jobs')
       .select('id, job_number, device_type, device_brand, device_model, reported_problem, status, payment_status, quoted_amount, service_revenue, created_at, updated_at, technician:profiles!left(full_name)')
@@ -115,7 +152,6 @@ export const customerService = {
 
     const jobIds = (jobs as any[]).map((j) => j.id);
 
-    // Fetch payments for calculation of collected amount and remaining due
     const { data: payments } = await supabase
       .from('repair_payments')
       .select('repair_id, amount')

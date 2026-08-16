@@ -3,6 +3,8 @@ import { CreateRepairJobInput } from '../types/repair.types';
 import { repairService } from '../services/repairService';
 import { customerService } from '@/features/customer-management/services/customerService';
 import { Customer } from '@/features/customer-management/types/customer.types';
+import { inventoryService } from '@/features/inventory-management/services/inventoryService';
+import { Category, Brand } from '@/features/inventory-management/types/inventory.types';
 import { UserProfile } from '@/types/user.types';
 import { SearchableCombobox, ComboboxOption } from '@/components/ui/SearchableCombobox';
 import { Button } from '@/components/ui/button';
@@ -22,11 +24,14 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
   onSuccess,
 }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [technicians, setTechnicians] = useState<UserProfile[]>([]);
 
   const [customerId, setCustomerId] = useState('');
-  const [deviceType, setDeviceType] = useState('Mobile');
-  const [deviceBrand, setDeviceBrand] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [deviceType, setDeviceType] = useState(''); // Initial value EMPTY (NOT Mobile!)
+  const [deviceBrand, setDeviceBrand] = useState(''); // Initial value EMPTY
   const [deviceModel, setDeviceModel] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [reportedProblem, setReportedProblem] = useState('');
@@ -42,20 +47,25 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
     if (isOpen) {
       const loadInitialData = async () => {
         try {
-          const [cList, tList] = await Promise.all([
+          const [cList, catList, bList, tList] = await Promise.all([
             customerService.getCustomers(),
+            inventoryService.getCategories(),
+            inventoryService.getBrands(),
             repairService.getTechnicians(),
           ]);
           setCustomers(cList);
+          setCategories(catList);
+          setBrands(bList);
           setTechnicians(tList);
-          if (cList.length > 0) setCustomerId(cList[0].id);
         } catch (err) {
-          console.error('Failed to load customers/technicians for repair modal:', err);
+          console.error('Failed to load initial data for repair intake modal:', err);
         }
       };
       loadInitialData();
 
-      setDeviceType('Mobile');
+      setCustomerId('');
+      setCustomerPhone('');
+      setDeviceType('');
       setDeviceBrand('');
       setDeviceModel('');
       setSerialNumber('');
@@ -70,28 +80,87 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Handle existing customer selection
+  const handleSelectCustomer = (selectedId: string) => {
+    setCustomerId(selectedId);
+    if (!selectedId) {
+      setCustomerPhone('');
+      return;
+    }
+    const found = customers.find((c) => c.id === selectedId);
+    if (found && found.phone && found.phone !== 'N/A') {
+      setCustomerPhone(found.phone);
+    }
+  };
+
+  // Inline Customer Creation with Phone Number & Duplicate Prevention
   const handleCreateCustomer = async (fullName: string) => {
-    const created = await customerService.createCustomer({ full_name: fullName, phone: 'N/A' });
-    setCustomers((prev) => [...prev, created]);
-    return { id: created.id, name: created.full_name };
+    const createdOrExisting = await customerService.findOrCreateCustomer({
+      full_name: fullName,
+      phone: customerPhone || 'N/A',
+    });
+
+    setCustomers((prev) => {
+      if (prev.some((c) => c.id === createdOrExisting.id)) return prev;
+      return [createdOrExisting, ...prev];
+    });
+
+    setCustomerId(createdOrExisting.id);
+    if (createdOrExisting.phone && createdOrExisting.phone !== 'N/A') {
+      setCustomerPhone(createdOrExisting.phone);
+    }
+
+    return { id: createdOrExisting.id, name: createdOrExisting.full_name };
+  };
+
+  // Inline Device Type (Category) Creation
+  const handleCreateCategory = async (typeName: string) => {
+    const cat = await inventoryService.createCategory(typeName);
+    setCategories((prev) => {
+      if (prev.some((c) => c.id === cat.id)) return prev;
+      return [...prev, cat];
+    });
+    setDeviceType(cat.name);
+    return { id: cat.name, name: cat.name };
+  };
+
+  // Inline Device Brand Creation
+  const handleCreateBrand = async (brandName: string) => {
+    const b = await inventoryService.createBrand(brandName);
+    setBrands((prev) => {
+      if (prev.some((item) => item.id === b.id)) return prev;
+      return [...prev, b];
+    });
+    setDeviceBrand(b.name);
+    return { id: b.name, name: b.name };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
-    if (!customerId) {
-      setFormError('Please select a customer for this repair ticket.');
+    let activeCustId = customerId;
+
+    if (!activeCustId) {
+      setFormError('Please select or create a customer for this repair ticket.');
       return;
     }
+
+    if (!customerPhone.trim()) {
+      setFormError('Customer phone number is required.');
+      return;
+    }
+
     if (!deviceType.trim()) {
-      setFormError('Device type is required.');
+      setFormError('Please select or create a Device Type (e.g. LED TV, Master Remote).');
       return;
     }
+
     if (!deviceBrand.trim()) {
-      setFormError('Device brand is required.');
+      setFormError('Please select or create a Device Brand (e.g. Samsung, LG, Sony).');
       return;
     }
+
     if (!reportedProblem.trim()) {
       setFormError('Reported problem description is required.');
       return;
@@ -113,26 +182,33 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
       return;
     }
 
-    const payload: CreateRepairJobInput = {
-      customer_id: customerId,
-      device_type: deviceType.trim(),
-      device_brand: deviceBrand.trim(),
-      reported_problem: reportedProblem.trim(),
-      device_model: deviceModel.trim() || undefined,
-      serial_number: serialNumber.trim() || undefined,
-      intake_notes: intakeNotes.trim() || undefined,
-      quoted_amount: qNum,
-      discount: dNum,
-      technician_id: isOwner && technicianId ? technicianId : undefined,
-    };
-
     try {
       setIsSubmitting(true);
+
+      // Ensure customer phone number is updated if modified
+      const currentCust = customers.find((c) => c.id === activeCustId);
+      if (currentCust && customerPhone.trim() && currentCust.phone !== customerPhone.trim()) {
+        await customerService.updateCustomer(activeCustId, { phone: customerPhone.trim() });
+      }
+
+      const payload: CreateRepairJobInput = {
+        customer_id: activeCustId,
+        device_type: deviceType.trim(),
+        device_brand: deviceBrand.trim(),
+        reported_problem: reportedProblem.trim(),
+        device_model: deviceModel.trim() || undefined,
+        serial_number: serialNumber.trim() || undefined,
+        intake_notes: intakeNotes.trim() || undefined,
+        quoted_amount: qNum,
+        discount: dNum,
+        technician_id: isOwner && technicianId ? technicianId : undefined,
+      };
+
       await repairService.createRepairJob(payload);
       onSuccess();
       onClose();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to create repair job card.');
+      setFormError(err.message || 'Failed to create repair job ticket.');
     } finally {
       setIsSubmitting(false);
     }
@@ -142,6 +218,16 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
     id: c.id,
     name: c.full_name,
     subtitle: c.phone ? `Ph: ${c.phone}` : undefined,
+  }));
+
+  const categoryOptions: ComboboxOption[] = categories.map((cat) => ({
+    id: cat.name,
+    name: cat.name,
+  }));
+
+  const brandOptions: ComboboxOption[] = brands.map((b) => ({
+    id: b.name,
+    name: b.name,
   }));
 
   const technicianOptions: ComboboxOption[] = technicians.map((t) => ({
@@ -176,37 +262,55 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             </div>
           )}
 
-          {/* Customer Selection Combobox */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground flex items-center gap-1">
-              <span>Customer</span>
-              <span className="text-destructive">*</span>
-            </label>
-            <SearchableCombobox
-              options={customerOptions}
-              value={customerId}
-              onChange={setCustomerId}
-              placeholder="Select Customer..."
-              searchPlaceholder="Search or create customer..."
-              onCreateNew={handleCreateCustomer}
-              required
-            />
+          {/* Customer Selection & Phone Number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                <span>Customer Name</span>
+                <span className="text-destructive">*</span>
+              </label>
+              <SearchableCombobox
+                options={customerOptions}
+                value={customerId}
+                onChange={handleSelectCustomer}
+                placeholder="Select or create customer..."
+                searchPlaceholder="Search customer by name or phone..."
+                onCreateNew={handleCreateCustomer}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+                <span>Customer Phone Number</span>
+                <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="tel"
+                required
+                placeholder="e.g. 9876543210"
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className="w-full text-xs font-mono px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+              />
+            </div>
           </div>
 
-          {/* Device Category & Brand */}
+          {/* Smart Master-Data Comboboxes for Device Type & Device Brand */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground flex items-center gap-1">
                 <span>Device Type</span>
                 <span className="text-destructive">*</span>
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Smartphone, Laptop, Tablet, TV"
+              <SearchableCombobox
+                options={categoryOptions}
                 value={deviceType}
-                onChange={(e) => setDeviceType(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                onChange={setDeviceType}
+                placeholder="Select or create device type..."
+                searchPlaceholder="Search or create device type (e.g. LED TV, Remote)..."
+                onCreateNew={handleCreateCategory}
+                required
               />
             </div>
 
@@ -215,24 +319,25 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
                 <span>Device Brand</span>
                 <span className="text-destructive">*</span>
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Apple, Samsung, Dell, Sony"
+              <SearchableCombobox
+                options={brandOptions}
                 value={deviceBrand}
-                onChange={(e) => setDeviceBrand(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                onChange={setDeviceBrand}
+                placeholder="Select or create brand..."
+                searchPlaceholder="Search or create brand (e.g. Samsung, LG, Sony)..."
+                onCreateNew={handleCreateBrand}
+                required
               />
             </div>
           </div>
 
-          {/* Model & Serial Number */}
+          {/* Model & Serial Number (Free-Text Fields) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Model Name / No.</label>
+              <label className="text-xs font-semibold text-muted-foreground">Model Name / No. (Free-text)</label>
               <input
                 type="text"
-                placeholder="e.g. iPhone 14 Pro, Galaxy S23"
+                placeholder="e.g. LG 43UR7500, Samsung UA55AUE60"
                 value={deviceModel}
                 onChange={(e) => setDeviceModel(e.target.value)}
                 className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
@@ -240,10 +345,10 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground">Serial / IMEI Number</label>
+              <label className="text-xs font-semibold text-muted-foreground">Serial / IMEI Number (Optional)</label>
               <input
                 type="text"
-                placeholder="Optional IMEI or serial string"
+                placeholder="Optional serial or IMEI number"
                 value={serialNumber}
                 onChange={(e) => setSerialNumber(e.target.value)}
                 className="w-full text-xs font-mono px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
@@ -251,7 +356,7 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             </div>
           </div>
 
-          {/* Reported Problem */}
+          {/* Reported Problem (Free-Text Area) */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground flex items-center gap-1">
               <span>Reported Problem / Issue</span>
@@ -260,7 +365,7 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             <textarea
               required
               rows={3}
-              placeholder="e.g. Cracked screen, battery drain, no power, water damage..."
+              placeholder="e.g. No display, vertical lines on panel, power standby red light blinking..."
               value={reportedProblem}
               onChange={(e) => setReportedProblem(e.target.value)}
               className="w-full text-xs p-3 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground resize-none"
@@ -272,7 +377,7 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
             <label className="text-xs font-semibold text-muted-foreground">Device Condition / Intake Notes</label>
             <input
               type="text"
-              placeholder="e.g. Scratches on back cover, SIM tray included"
+              placeholder="e.g. Includes original remote, back cover minor scratches"
               value={intakeNotes}
               onChange={(e) => setIntakeNotes(e.target.value)}
               className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
@@ -318,10 +423,10 @@ export const RepairFormModal: React.FC<RepairFormModalProps> = ({
                 options={technicianOptions}
                 value={technicianId}
                 onChange={setTechnicianId}
-                placeholder="Unassigned (Assign Later)..."
+                placeholder="Unassigned (Shared Repair Queue)..."
                 searchPlaceholder="Search technician by name..."
                 allowClear
-                clearLabel="Unassigned (Assign Later)"
+                clearLabel="Unassigned (Shared Repair Queue)"
               />
             </div>
           )}
