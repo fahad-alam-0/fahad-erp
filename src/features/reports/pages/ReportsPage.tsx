@@ -19,6 +19,7 @@ import { OwnerFinancialOverviewWidget } from '../components/OwnerFinancialOvervi
 import { RepairServicePerformanceWidget } from '../components/RepairServicePerformanceWidget';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
 import {
   TrendingUp,
   ShoppingCart,
@@ -31,8 +32,8 @@ import {
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
-  const { user } = useAuthStore();
-  const userRole = (user?.role as 'OWNER' | 'TECHNICIAN' | 'STAFF') || 'STAFF';
+  const { user, profile, role: storeRole } = useAuthStore();
+  const userRole = storeRole || profile?.role || 'OWNER';
   const userId = user?.id || '';
 
   const isOwner = userRole === 'OWNER';
@@ -55,26 +56,26 @@ export const ReportsPage: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
-      const bounds = reportsService.getDateRangeBounds(dateRange);
+      const { startDate, endDate } = reportsService.getDateRangeBounds(dateRange);
 
-      const [sales, purchasing, inventory, repair, ownerFin, repairPerf] = await Promise.all([
-        reportsService.getSalesAnalytics(bounds.startDate, bounds.endDate),
-        reportsService.getPurchasingAnalytics(bounds.startDate, bounds.endDate),
+      const [sRes, pRes, iRes, rRes, oRes, perfRes] = await Promise.all([
+        reportsService.getSalesAnalytics(startDate, endDate),
+        reportsService.getPurchasingAnalytics(startDate, endDate),
         reportsService.getInventoryAnalytics(),
-        reportsService.getRepairAnalytics(bounds.startDate, bounds.endDate, userRole, userId),
-        reportsService.getOwnerFinancialOverview(bounds.startDate, bounds.endDate, userRole),
-        reportsService.getRepairServicePerformanceReport(bounds.startDate, bounds.endDate, userRole, userId),
+        reportsService.getRepairAnalytics(startDate, endDate, userRole, userId),
+        reportsService.getOwnerFinancialOverview(startDate, endDate, userRole),
+        reportsService.getRepairServicePerformanceReport(startDate, endDate, userRole, userId),
       ]);
 
-      setSalesData(sales);
-      setPurchasingData(purchasing);
-      setInventoryData(inventory);
-      setRepairData(repair);
-      setOwnerFinancialData(ownerFin);
-      setRepairPerformanceData(repairPerf);
+      setSalesData(sRes);
+      setPurchasingData(pRes);
+      setInventoryData(iRes);
+      setRepairData(rRes);
+      setOwnerFinancialData(oRes);
+      setRepairPerformanceData(perfRes);
     } catch (err: any) {
-      console.error('Failed to load reports analytics data:', err);
-      setError(err.message || 'Failed to load reports analytics.');
+      console.error('Failed to load reports:', err);
+      setError(err.message || 'Failed to fetch business analytics reports.');
     } finally {
       setIsLoading(false);
     }
@@ -84,46 +85,87 @@ export const ReportsPage: React.FC = () => {
     loadAllReports();
   }, [loadAllReports]);
 
+  // Real-time subscription to sales, purchases, repairs, snapshots for instant financial reports sync
+  useEffect(() => {
+    const channel = supabase
+      .channel('reports-page-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sales' },
+        () => {
+          loadAllReports();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sale_items' },
+        () => {
+          loadAllReports();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'purchases' },
+        () => {
+          loadAllReports();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'repair_jobs' },
+        () => {
+          loadAllReports();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'repair_profit_snapshots' },
+        () => {
+          loadAllReports();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadAllReports]);
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <PageHeader
-        title="Reports & Retail Analytics"
-        subtitle="Analyze sales velocity, inventory health, procurement purchasing, and repair performance."
+        title="Reports & Financial Analytics"
+        subtitle="Comprehensive business intelligence, sales profitability, inventory valuation, and worker performance."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadAllReports}
-            disabled={isLoading}
-            className="flex items-center space-x-1.5 text-xs pressable"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-primary' : ''}`} />
-            <span>Refresh Data</span>
-          </Button>
+          <div className="flex items-center space-x-2">
+            <DateRangeSelector selectedRange={dateRange} onRangeChange={setDateRange} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadAllReports}
+              disabled={isLoading}
+              className="flex items-center gap-1 text-xs"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         }
       />
 
-      {/* Date Range Selector Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-card border border-border shadow-2xs">
-        <DateRangeSelector selectedRange={dateRange} onRangeChange={setDateRange} />
-        <span className="text-xs font-mono text-muted-foreground">
-          {reportsService.getDateRangeBounds(dateRange).label} Reporting Window
-        </span>
-      </div>
-
-      {/* Tab Selection Bar */}
-      <div className="flex border-b border-border bg-card rounded-t-xl px-4 pt-2 shadow-2xs overflow-x-auto">
+      {/* Report Category Tabs */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-xs font-semibold">
         {isOwner && (
           <button
             onClick={() => setActiveTab('executive')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
               activeTab === 'executive'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
-            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <ShieldCheck className="w-4 h-4" />
             <span>Executive Financial Overview</span>
           </button>
         )}
@@ -131,27 +173,27 @@ export const ReportsPage: React.FC = () => {
         {!isTechnician && (
           <button
             onClick={() => setActiveTab('sales')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
               activeTab === 'sales'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
-            <TrendingUp className="w-4 h-4 text-emerald-500" />
-            <span>Sales Analytics</span>
+            <TrendingUp className="w-4 h-4" />
+            <span>Sales Analytics & Profitability</span>
           </button>
         )}
 
         {!isTechnician && (
           <button
             onClick={() => setActiveTab('purchasing')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
               activeTab === 'purchasing'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
-            <ShoppingCart className="w-4 h-4 text-sky-500" />
+            <ShoppingCart className="w-4 h-4" />
             <span>Purchasing Analytics</span>
           </button>
         )}
@@ -159,39 +201,41 @@ export const ReportsPage: React.FC = () => {
         {!isTechnician && (
           <button
             onClick={() => setActiveTab('inventory')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
               activeTab === 'inventory'
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
             }`}
           >
-            <Package className="w-4 h-4 text-amber-500" />
-            <span>Inventory Health</span>
+            <Package className="w-4 h-4" />
+            <span>Inventory Health & Valuation</span>
+          </button>
+        )}
+
+        {!isTechnician && (
+          <button
+            onClick={() => setActiveTab('service-performance')}
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
+              activeTab === 'service-performance'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <Award className="w-4 h-4" />
+            <span>Repair Service Performance</span>
           </button>
         )}
 
         <button
-          onClick={() => setActiveTab('service-performance')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
-            activeTab === 'service-performance'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Award className="w-4 h-4 text-emerald-500" />
-          <span>Repair Service Performance</span>
-        </button>
-
-        <button
           onClick={() => setActiveTab('repairs')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+          className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
             activeTab === 'repairs'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
+              ? 'bg-primary text-primary-foreground shadow-2xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
           }`}
         >
-          <Wrench className="w-4 h-4 text-primary" />
-          <span>Repair Status Pipeline</span>
+          <Wrench className="w-4 h-4" />
+          <span>Repair Pipeline</span>
         </button>
       </div>
 
@@ -225,7 +269,7 @@ export const ReportsPage: React.FC = () => {
             <InventoryAnalyticsWidget data={inventoryData} isLoading={isLoading} userRole={userRole} />
           )}
 
-          {activeTab === 'service-performance' && (
+          {activeTab === 'service-performance' && !isTechnician && (
             <RepairServicePerformanceWidget data={repairPerformanceData} isLoading={isLoading} userRole={userRole} />
           )}
 

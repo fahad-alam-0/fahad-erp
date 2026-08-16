@@ -22,15 +22,15 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
 
   const maxTrendRevenue = Math.max(...data.salesTrend.map((t) => t.revenue), 1);
   const prof = data.productProfitability;
-  const isOwner = userRole === 'OWNER';
+  const isTechnician = userRole === 'TECHNICIAN';
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards */}
+      {/* Top Financial KPI Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
         <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
-            <span>Sales Revenue</span>
+            <span>Total Selling Revenue</span>
             <TrendingUp className="w-4 h-4 text-emerald-500" />
           </span>
           <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
@@ -41,13 +41,52 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
           </p>
         </div>
 
+        {!isTechnician && prof && (
+          <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Total Actual Cost</span>
+              <Coins className="w-4 h-4 text-rose-500" />
+            </span>
+            <p className="text-xl font-bold font-mono text-rose-600 dark:text-rose-400">
+              {formatCurrency(prof.totalActualCost, 'INR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Historical cost snapshot basis</p>
+          </div>
+        )}
+
+        {!isTechnician && prof && (
+          <div className="p-4 rounded-xl bg-card border border-emerald-500/30 bg-emerald-500/5 shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Total Actual Profit</span>
+              <Coins className="w-4 h-4 text-emerald-500" />
+            </span>
+            <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(prof.totalGrossProfit, 'INR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Selling Revenue − Actual Cost</p>
+          </div>
+        )}
+
+        {!isTechnician && prof && (
+          <div className="p-4 rounded-xl bg-card border border-primary/30 bg-primary/5 shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Overall Profit Margin</span>
+              <Percent className="w-4 h-4 text-primary" />
+            </span>
+            <p className="text-xl font-bold font-mono text-primary">
+              {prof.overallMarginPct.toFixed(2)}%
+            </p>
+            <p className="text-[10px] text-muted-foreground">Actual Profit / Revenue × 100</p>
+          </div>
+        )}
+
         <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
             <span>Invoices Count</span>
             <ShoppingCart className="w-4 h-4 text-primary" />
           </span>
           <p className="text-xl font-bold font-mono text-foreground">{data.salesCount} Sales</p>
-          <p className="text-[10px] text-muted-foreground">Settled retail orders</p>
+          <p className="text-[10px] text-muted-foreground">Settled retail receipts</p>
         </div>
 
         <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
@@ -60,33 +99,17 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
           </p>
           <p className="text-[10px] text-muted-foreground">Revenue per receipt</p>
         </div>
-
-        {isOwner && prof && (
-          <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
-              <span>Actual Gross Profit</span>
-              <Coins className="w-4 h-4 text-emerald-500" />
-            </span>
-            <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(prof.totalGrossProfit, 'INR')}
-            </p>
-            <p className="text-[10px] text-muted-foreground font-mono font-bold flex items-center gap-1">
-              <Percent className="w-3 h-3 text-primary" />
-              <span>{prof.overallMarginPct.toFixed(2)}% Gross Margin</span>
-            </p>
-          </div>
-        )}
       </div>
 
-      {/* Product-Level Sales Profitability Analysis (Owner Only) */}
-      {isOwner && prof && (
+      {/* PRODUCT PROFITABILITY ANALYSIS TABLE & TOTALS SUMMARY */}
+      {!isTechnician && prof && (
         <Card className="border-border bg-card overflow-hidden">
           <CardHeader className="p-4 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
             <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Coins className="w-4 h-4 text-emerald-500" />
-              <span>PRODUCT-LEVEL SALES PROFITABILITY ANALYSIS</span>
+              <span>PRODUCT PROFITABILITY ANALYSIS</span>
             </CardTitle>
-            <span className="text-[10px] font-mono text-muted-foreground px-2 py-0.5 bg-muted rounded border border-border">
+            <span className="text-[10px] font-mono text-muted-foreground px-2.5 py-1 bg-muted rounded border border-border">
               Historical Cost Basis (sale_items.unit_cost_price)
             </span>
           </CardHeader>
@@ -98,15 +121,15 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
                   <th className="p-3 text-center font-sans">Qty Sold</th>
                   <th className="p-3 text-right font-sans">Actual Cost</th>
                   <th className="p-3 text-right font-sans">Selling Revenue</th>
-                  <th className="p-3 text-right font-sans">Gross Profit</th>
-                  <th className="p-3 text-right font-sans">Margin %</th>
+                  <th className="p-3 text-right font-sans">Actual Profit</th>
+                  <th className="p-3 text-right font-sans">Profit Margin</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {prof.products.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-muted-foreground italic font-sans">
-                      No product sales recorded in this date window.
+                      No completed product sales recorded in this date range.
                     </td>
                   </tr>
                 ) : (
@@ -120,7 +143,7 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
                           </span>
                         )}
                       </td>
-                      <td className="p-3 text-center font-bold text-foreground">{item.qtySold}</td>
+                      <td className="p-3 text-center font-bold text-foreground">{item.qtySold} pcs</td>
                       <td className="p-3 text-right text-rose-600 dark:text-rose-400">
                         {formatCurrency(item.actualCost, 'INR')}
                       </td>
@@ -140,7 +163,7 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
               {prof.products.length > 0 && (
                 <tfoot className="bg-muted/50 font-bold border-t-2 border-border text-foreground">
                   <tr>
-                    <td className="p-3 font-sans uppercase">Total Summary</td>
+                    <td className="p-3 font-sans uppercase">TOTAL PROFITABILITY SUMMARY</td>
                     <td className="p-3 text-center text-primary">{prof.totalQtySold} pcs</td>
                     <td className="p-3 text-right text-rose-600 dark:text-rose-400">
                       {formatCurrency(prof.totalActualCost, 'INR')}
