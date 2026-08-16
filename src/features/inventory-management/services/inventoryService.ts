@@ -15,10 +15,10 @@ export const inventoryService = {
       .select('*, category:categories(name), brand:brands(name)')
       .order('created_at', { ascending: false });
 
-    if (params?.categoryId) {
+    if (params?.categoryId && params.categoryId !== 'ALL') {
       req = req.eq('category_id', params.categoryId);
     }
-    if (params?.brandId) {
+    if (params?.brandId && params.brandId !== 'ALL') {
       req = req.eq('brand_id', params.brandId);
     }
     if (params?.isActive !== undefined) {

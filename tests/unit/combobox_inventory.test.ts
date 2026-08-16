@@ -125,4 +125,25 @@ describe('Combobox UX & Inventory/Repair Bug Fix Unit Tests', () => {
     expect(result).toHaveLength(2);
     expect(result[0].name).toBe('Apple');
   });
+
+  it('7. Ensures getProducts never passes "ALL" sentinel string to category_id or brand_id eq filters', async () => {
+    const mockEq = vi.fn().mockReturnThis();
+    const mockOrder = vi.fn().mockResolvedValue({ data: [], error: null });
+    const mockSelect = vi.fn().mockReturnValue({
+      order: mockOrder,
+      eq: mockEq,
+    });
+
+    vi.mocked(supabase.from).mockReturnValue({ select: mockSelect } as any);
+
+    await inventoryService.getProducts({
+      categoryId: 'ALL',
+      brandId: 'ALL',
+      stockStatus: 'ALL',
+    });
+
+    // Verify .eq was NEVER called with 'ALL' for category_id or brand_id
+    expect(mockEq).not.toHaveBeenCalledWith('category_id', 'ALL');
+    expect(mockEq).not.toHaveBeenCalledWith('brand_id', 'ALL');
+  });
 });
