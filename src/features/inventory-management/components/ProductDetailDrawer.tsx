@@ -12,6 +12,8 @@ import {
   History,
   Loader2,
   FileText,
+  Coins,
+  TrendingUp,
 } from 'lucide-react';
 
 interface ProductDetailDrawerProps {
@@ -51,6 +53,14 @@ export const ProductDetailDrawer: React.FC<ProductDetailDrawerProps> = ({
   };
 
   if (!isOpen || !product) return null;
+
+  const stock = Number(product.stock_quantity || 0);
+  const costPrice = Number(product.current_cost_price || 0);
+  const sellingPrice = Number(product.selling_price || 0);
+
+  const invCostValue = stock * costPrice;
+  const potSalesValue = stock * sellingPrice;
+  const potGrossProfit = potSalesValue - invCostValue;
 
   const getStockStatus = (p: Product) => {
     if (p.stock_quantity === 0) return 'OUT_OF_STOCK';
@@ -123,34 +133,66 @@ export const ProductDetailDrawer: React.FC<ProductDetailDrawerProps> = ({
         </div>
 
         {/* Pricing & Stock Summary Grid */}
-        <div className="p-4 bg-muted/40 border-b border-border grid grid-cols-3 gap-3 text-xs">
-          <div className="p-3 bg-card rounded-lg border border-border space-y-1">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
-              Selling Price (Customer)
-            </span>
-            <span className="font-mono font-bold text-sm text-foreground">
-              {formatCurrency(product.selling_price, 'INR')}
-            </span>
-          </div>
-
-          <div className="p-3 bg-card rounded-lg border border-border space-y-1">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
-              Internal Cost Price
-            </span>
-            <span className="font-mono font-bold text-sm text-muted-foreground">
-              {formatCurrency(product.current_cost_price, 'INR')}
-            </span>
-          </div>
-
-          <div className="p-3 bg-card rounded-lg border border-border space-y-1">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
-              Stock Level
-            </span>
-            <div className="flex items-center space-x-2">
-              <span className="font-mono font-bold text-sm text-foreground">
-                {product.stock_quantity} {product.unit}
+        <div className="p-4 bg-muted/40 border-b border-border space-y-3">
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="p-3 bg-card rounded-lg border border-border space-y-1">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
+                Selling Price
               </span>
-              <StatusBadge status={getStockStatus(product)} />
+              <span className="font-mono font-bold text-sm text-foreground">
+                {formatCurrency(sellingPrice, 'INR')}
+              </span>
+            </div>
+
+            <div className="p-3 bg-card rounded-lg border border-border space-y-1">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
+                Current Cost Basis
+              </span>
+              <span className="font-mono font-bold text-sm text-muted-foreground">
+                {formatCurrency(costPrice, 'INR')}
+              </span>
+            </div>
+
+            <div className="p-3 bg-card rounded-lg border border-border space-y-1">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase block">
+                Stock Level
+              </span>
+              <div className="flex items-center space-x-2">
+                <span className="font-mono font-bold text-sm text-foreground">
+                  {stock} {product.unit}
+                </span>
+                <StatusBadge status={getStockStatus(product)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Financial Valuation Summary Card */}
+          <div className="p-3 bg-card rounded-lg border border-emerald-500/20 grid grid-cols-3 gap-3 text-xs font-mono">
+            <div>
+              <span className="text-[10px] text-muted-foreground font-sans font-semibold uppercase flex items-center gap-1">
+                <Coins className="w-3 h-3 text-emerald-500" /> Inventory Value:
+              </span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                {formatCurrency(invCostValue, 'INR')}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] text-muted-foreground font-sans font-semibold uppercase flex items-center gap-1">
+                <TrendingUp className="w-3 h-3 text-sky-500" /> Potential Sales:
+              </span>
+              <span className="font-bold text-foreground">
+                {formatCurrency(potSalesValue, 'INR')}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-[10px] text-muted-foreground font-sans font-semibold uppercase flex items-center gap-1">
+                <Coins className="w-3 h-3 text-primary" /> Potential Profit:
+              </span>
+              <span className="font-bold text-primary">
+                {formatCurrency(potGrossProfit, 'INR')}
+              </span>
             </div>
           </div>
         </div>

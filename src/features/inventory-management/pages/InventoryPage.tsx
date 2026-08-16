@@ -25,9 +25,9 @@ import {
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
-  const { isInitialized, isAuthenticated, user } = useAuthStore();
-  const userRole = user?.role || 'STAFF';
-  const isOwner = userRole === 'OWNER';
+  const { isInitialized, isAuthenticated, role: storeRole, profile } = useAuthStore();
+  const userRole = storeRole || profile?.role || 'OWNER';
+  const isTechnician = userRole === 'TECHNICIAN';
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -109,7 +109,7 @@ export const InventoryPage: React.FC = () => {
     }
   }, [isInitialized, isAuthenticated, loadProducts]);
 
-  // Supabase Realtime channel subscription for live updates on stock, sales, purchases
+  // Supabase Realtime channel subscription for live updates on stock, sales, purchases, adjustments
   useEffect(() => {
     if (!isInitialized || !isAuthenticated) return;
 
@@ -175,7 +175,7 @@ export const InventoryPage: React.FC = () => {
   const lowStockCount = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold).length;
   const outOfStockCount = products.filter((p) => p.stock_quantity === 0).length;
 
-  // Live monetary inventory valuations
+  // Live monetary inventory valuations calculated strictly from DB records
   const totalInventoryValue = products.reduce(
     (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.current_cost_price || 0),
     0
@@ -200,66 +200,78 @@ export const InventoryPage: React.FC = () => {
         }
       />
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* TOTAL INVENTORY VALUE CARD (Owner Only) */}
-        {isOwner ? (
+      {/* Financial Valuation & Inventory KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        {/* TOTAL INVENTORY VALUE CARD */}
+        {!isTechnician && (
           <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 shadow-2xs space-y-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
               <span>Total Inventory Value</span>
               <Coins className="w-4 h-4 text-emerald-500" />
             </span>
-            <p className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+            <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
               {formatCurrency(totalInventoryValue, 'INR')}
             </p>
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
-              <span>Potential Retail Value:</span>
-              <span className="font-mono font-bold text-foreground">{formatCurrency(totalPotentialSalesValue, 'INR')}</span>
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-primary/10 text-primary">
-              <Package className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Active Products</p>
-              <p className="text-2xl font-bold text-foreground mt-0.5">{activeProductsCount}</p>
-            </div>
+            <p className="text-[10px] text-muted-foreground">Current cost value of all stock</p>
           </div>
         )}
 
-        {isOwner ? (
-          <div className="p-4 rounded-xl border border-border bg-card shadow-2xs space-y-1">
+        {/* POTENTIAL SALES VALUE CARD */}
+        {!isTechnician && (
+          <div className="p-4 rounded-xl border border-sky-500/30 bg-sky-500/5 shadow-2xs space-y-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
-              <span>Potential Gross Margin</span>
-              <TrendingUp className="w-4 h-4 text-primary" />
+              <span>Potential Sales Value</span>
+              <TrendingUp className="w-4 h-4 text-sky-500" />
             </span>
-            <p className="text-2xl font-bold font-mono text-primary mt-0.5">
+            <p className="text-xl font-bold font-mono text-foreground mt-0.5">
+              {formatCurrency(totalPotentialSalesValue, 'INR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Stock × Current Selling Price</p>
+          </div>
+        )}
+
+        {/* POTENTIAL GROSS PROFIT CARD */}
+        {!isTechnician && (
+          <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Potential Gross Profit</span>
+              <Coins className="w-4 h-4 text-primary" />
+            </span>
+            <p className="text-xl font-bold font-mono text-primary mt-0.5">
               {formatCurrency(totalPotentialGrossProfit, 'INR')}
             </p>
-            <p className="text-[10px] text-muted-foreground">Retail profit if all stock is sold</p>
+            <p className="text-[10px] text-muted-foreground">Potential Sales − Cost Value</p>
           </div>
-        ) : null}
+        )}
 
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-amber-500/10 text-amber-600">
-            <AlertTriangle className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Low Stock Items</p>
-            <p className="text-2xl font-bold text-amber-600 mt-0.5">{lowStockCount}</p>
-          </div>
+        {/* TOTAL ACTIVE PRODUCTS CARD */}
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs space-y-1">
+          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+            <span>Total Active Products</span>
+            <Package className="w-4 h-4 text-primary" />
+          </span>
+          <p className="text-xl font-bold font-mono text-foreground mt-0.5">{activeProductsCount}</p>
+          <p className="text-[10px] text-muted-foreground">Catalog products</p>
         </div>
 
-        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-destructive/10 text-destructive">
-            <AlertCircle className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Out of Stock</p>
-            <p className="text-2xl font-bold text-destructive mt-0.5">{outOfStockCount}</p>
-          </div>
+        {/* LOW STOCK ITEMS CARD */}
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs space-y-1">
+          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+            <span>Low Stock Items</span>
+            <AlertTriangle className="w-4 h-4 text-amber-500" />
+          </span>
+          <p className="text-xl font-bold font-mono text-amber-500 mt-0.5">{lowStockCount}</p>
+          <p className="text-[10px] text-muted-foreground">Below threshold</p>
+        </div>
+
+        {/* OUT OF STOCK CARD */}
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs space-y-1">
+          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+            <span>Out of Stock</span>
+            <AlertCircle className="w-4 h-4 text-destructive" />
+          </span>
+          <p className="text-xl font-bold font-mono text-destructive mt-0.5">{outOfStockCount}</p>
+          <p className="text-[10px] text-muted-foreground">Zero stock remaining</p>
         </div>
       </div>
 

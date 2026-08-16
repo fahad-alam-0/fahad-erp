@@ -3,7 +3,7 @@ import { Product } from '../types/inventory.types';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { formatCurrency } from '@/lib/utils';
-import { Eye, Edit, Sliders, Package, Tag, Coins } from 'lucide-react';
+import { Eye, Edit, Sliders, Package, Tag } from 'lucide-react';
 
 interface ProductTableProps {
   products: Product[];
@@ -20,7 +20,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onAdjustStock,
   userRole = 'OWNER',
 }) => {
-  const isOwner = userRole === 'OWNER';
+  const isTechnician = userRole === 'TECHNICIAN';
 
   const getStockStatus = (p: Product) => {
     if (p.stock_quantity === 0) return 'OUT_OF_STOCK';
@@ -38,9 +38,11 @@ export const ProductTable: React.FC<ProductTableProps> = ({
               <th className="p-3">Product Name & Code</th>
               <th className="p-3">Category & Brand</th>
               <th className="p-3 text-right">Selling Price</th>
-              {isOwner && <th className="p-3 text-right">Cost Price</th>}
+              {!isTechnician && <th className="p-3 text-right">Cost Price</th>}
               <th className="p-3 text-center">Stock Level</th>
-              {isOwner && <th className="p-3 text-right">Inventory Value</th>}
+              {!isTechnician && <th className="p-3 text-right">Inventory Value</th>}
+              {!isTechnician && <th className="p-3 text-right">Potential Sales</th>}
+              {!isTechnician && <th className="p-3 text-right">Potential Profit</th>}
               <th className="p-3">Status</th>
               <th className="p-3 text-right">Actions</th>
             </tr>
@@ -48,7 +50,13 @@ export const ProductTable: React.FC<ProductTableProps> = ({
           <tbody className="divide-y divide-border">
             {products.map((prod) => {
               const status = getStockStatus(prod);
-              const invValue = Number(prod.stock_quantity || 0) * Number(prod.current_cost_price || 0);
+              const stock = Number(prod.stock_quantity || 0);
+              const costPrice = Number(prod.current_cost_price || 0);
+              const sellingPrice = Number(prod.selling_price || 0);
+
+              const invValue = stock * costPrice;
+              const potSalesValue = stock * sellingPrice;
+              const potProfit = potSalesValue - invValue;
 
               return (
                 <tr key={prod.id} className="hover:bg-muted/30 transition-colors">
@@ -74,22 +82,32 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     </p>
                   </td>
                   <td className="p-3 text-right font-mono font-bold text-foreground">
-                    {formatCurrency(prod.selling_price, 'INR')}
+                    {formatCurrency(sellingPrice, 'INR')}
                   </td>
-                  {isOwner && (
+                  {!isTechnician && (
                     <td className="p-3 text-right font-mono text-muted-foreground font-medium">
-                      {formatCurrency(prod.current_cost_price, 'INR')}
+                      {formatCurrency(costPrice, 'INR')}
                     </td>
                   )}
                   <td className="p-3 text-center font-mono font-semibold text-foreground">
-                    {prod.stock_quantity} {prod.unit}
+                    {stock} {prod.unit}
                     <span className="text-[10px] text-muted-foreground block font-sans">
                       Threshold: {prod.low_stock_threshold}
                     </span>
                   </td>
-                  {isOwner && (
+                  {!isTechnician && (
                     <td className="p-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                       {formatCurrency(invValue, 'INR')}
+                    </td>
+                  )}
+                  {!isTechnician && (
+                    <td className="p-3 text-right font-mono font-bold text-foreground">
+                      {formatCurrency(potSalesValue, 'INR')}
+                    </td>
+                  )}
+                  {!isTechnician && (
+                    <td className="p-3 text-right font-mono font-bold text-primary">
+                      {formatCurrency(potProfit, 'INR')}
                     </td>
                   )}
                   <td className="p-3">
@@ -139,7 +157,13 @@ export const ProductTable: React.FC<ProductTableProps> = ({
       <div className="md:hidden divide-y divide-border">
         {products.map((prod) => {
           const status = getStockStatus(prod);
-          const invValue = Number(prod.stock_quantity || 0) * Number(prod.current_cost_price || 0);
+          const stock = Number(prod.stock_quantity || 0);
+          const costPrice = Number(prod.current_cost_price || 0);
+          const sellingPrice = Number(prod.selling_price || 0);
+
+          const invValue = stock * costPrice;
+          const potSalesValue = stock * sellingPrice;
+          const potProfit = potSalesValue - invValue;
 
           return (
             <div key={prod.id} className="p-4 space-y-3 hover:bg-muted/30 transition-colors">
@@ -164,25 +188,55 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                     Selling Price
                   </span>
                   <span className="font-mono font-bold text-foreground">
-                    {formatCurrency(prod.selling_price, 'INR')}
+                    {formatCurrency(sellingPrice, 'INR')}
                   </span>
                 </div>
+                {!isTechnician && (
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-semibold uppercase">
+                      Cost Price
+                    </span>
+                    <span className="font-mono text-muted-foreground">
+                      {formatCurrency(costPrice, 'INR')}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="text-[10px] text-muted-foreground block font-semibold uppercase">
                     Current Stock
                   </span>
                   <span className="font-mono font-bold text-foreground">
-                    {prod.stock_quantity} {prod.unit}
+                    {stock} {prod.unit}
                   </span>
                 </div>
-                {isOwner && (
-                  <div className="col-span-2 pt-1 border-t border-border/50 flex justify-between items-center">
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase flex items-center gap-1">
-                      <Coins className="w-3 h-3 text-emerald-500" /> Inventory Cost Value:
+                {!isTechnician && (
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block font-semibold uppercase">
+                      Inventory Value
                     </span>
                     <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
                       {formatCurrency(invValue, 'INR')}
                     </span>
+                  </div>
+                )}
+                {!isTechnician && (
+                  <div className="col-span-2 pt-1.5 border-t border-border/50 grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block font-semibold uppercase">
+                        Potential Sales
+                      </span>
+                      <span className="font-mono font-bold text-foreground">
+                        {formatCurrency(potSalesValue, 'INR')}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-muted-foreground block font-semibold uppercase">
+                        Potential Profit
+                      </span>
+                      <span className="font-mono font-bold text-primary">
+                        {formatCurrency(potProfit, 'INR')}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
