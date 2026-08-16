@@ -370,7 +370,7 @@ export const reportsService = {
       supabase.from('purchases').select('total_amount').gte('created_at', startDate).lte('created_at', endDate),
       supabase
         .from('repair_profit_snapshots')
-        .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey(full_name)')
+        .select('*, technician:profiles!left(full_name)')
         .gte('calculated_at', startDate)
         .lte('calculated_at', endDate),
     ]);

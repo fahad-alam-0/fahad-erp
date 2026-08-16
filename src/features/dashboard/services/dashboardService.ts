@@ -100,7 +100,7 @@ export const dashboardService = {
         selling_price: Number(p.selling_price || 0),
       }));
 
-    // 6. Recent Sales (Corrected: query payment_status instead of non-existent sales.payment_method, with !left join on customers for walk-in sales)
+    // 6. Recent Sales
     const recentSalesRes = await supabase
       .from('sales')
       .select('id, sale_number, total_amount, payment_status, created_at, customer:customers!left(full_name)')
@@ -121,7 +121,7 @@ export const dashboardService = {
       created_at: s.created_at,
     }));
 
-    // 7. Recent Repairs (Explicit !left joins on customers and profiles to preserve unassigned repairs)
+    // 7. Recent Repairs
     const recentRepairsRes = await supabase
       .from('repair_jobs')
       .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, service_revenue, created_at, customer:customers!left(full_name), technician:profiles!repair_jobs_technician_id_fkey!left(full_name)')
@@ -150,7 +150,7 @@ export const dashboardService = {
     // 8. Technician Earnings Summary
     const snapshotsRes = await supabase
       .from('repair_profit_snapshots')
-      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)');
+      .select('technician_id, technician_share, technician:profiles!left(full_name)');
 
     if (snapshotsRes.error) {
       console.error('Error fetching technician profit snapshots:', snapshotsRes.error);

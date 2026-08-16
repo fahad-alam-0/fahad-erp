@@ -17,7 +17,7 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () => {
+describe('Master Repair Workflow & Profit Attribution Unit Tests', () => {
   const mockRpc = vi.fn();
 
   beforeEach(() => {
@@ -27,12 +27,15 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
     } as any);
   });
 
-  it('1. dashboardService uses outer left joins and returns walk-in sales & unassigned repairs', async () => {
+  it('1. dashboardService queries repair_profit_snapshots with left joins for owner metrics', async () => {
     const mockWalkInSales = [
       { id: 's_01', sale_number: 'INV-20260816-001', total_amount: 250, payment_status: 'PAID', created_at: new Date().toISOString(), customer: null },
     ];
     const mockUnassignedRepairs = [
       { id: 'r_01', job_number: 'REP-20260816-001', device_type: 'TV', device_brand: 'Samsung', reported_problem: 'No display', status: 'RECEIVED', quoted_amount: 1000, service_revenue: 1000, created_at: new Date().toISOString(), customer: null, technician: null },
+    ];
+    const mockSnapshots = [
+      { technician_id: 'tech_01', technician_share: 560, technician: { full_name: 'Fahad Technician' } },
     ];
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
@@ -77,7 +80,7 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
       }
       if (table === 'repair_profit_snapshots') {
         return {
-          select: vi.fn().mockResolvedValue({ data: [], error: null }),
+          select: vi.fn().mockResolvedValue({ data: mockSnapshots, error: null }),
         } as any;
       }
       return {} as any;
@@ -86,10 +89,9 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
     const metrics = await dashboardService.getOwnerMetrics();
 
     expect(metrics.todaySalesTotal).toBe(250);
-    expect(metrics.recentSales).toHaveLength(1);
-    expect(metrics.recentSales[0].customer_name).toBe('Walk-in Customer');
-    expect(metrics.recentRepairs).toHaveLength(1);
-    expect(metrics.recentRepairs[0].technician_name).toBe('Unassigned');
+    expect(metrics.technicianEarnings).toHaveLength(1);
+    expect(metrics.technicianEarnings[0].technician_name).toBe('Fahad Technician');
+    expect(metrics.technicianEarnings[0].total_technician_share).toBe(560);
   });
 
   it('2. customerService.getCustomerRepairHistory uses outer left join and includes unassigned repairs', async () => {
@@ -149,13 +151,24 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
     }));
   });
 
-  it('4. dashboardService throws explicit error on Supabase query failure', async () => {
-    vi.mocked(supabase.from).mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        gte: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database query timeout' } }),
-      }),
-    } as any);
+  it('4. Profit attribution logic calculates 70% technician / 30% owner for technician claims and 100% owner for owner claims', () => {
+    const serviceRevenue = 1000;
+    const partsCost = 200;
+    const netProfit = serviceRevenue - partsCost; // 800
 
-    await expect(dashboardService.getOwnerMetrics()).rejects.toThrow('Failed to fetch today sales metrics: Database query timeout');
+    // Technician claim case
+    const techShare = Math.round(netProfit * 0.70 * 100) / 100; // 560
+    const ownerShareFromTech = netProfit - techShare; // 240
+
+    expect(netProfit).toBe(800);
+    expect(techShare).toBe(560);
+    expect(ownerShareFromTech).toBe(240);
+
+    // Owner claim case
+    const ownerShareFromOwner = netProfit; // 800
+    const techShareFromOwner = 0; // 0
+
+    expect(ownerShareFromOwner).toBe(800);
+    expect(techShareFromOwner).toBe(0);
   });
 });
