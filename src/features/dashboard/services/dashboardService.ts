@@ -121,9 +121,9 @@ export const dashboardService = {
       created_at: s.created_at,
     }));
 
-    // 7. Recent Repairs
-    const recentRepairsRes = await supabase
-      .from('repair_jobs')
+    // 7. Recent Repairs (Explicit foreign key hint to prevent PostgREST ambiguity between technician_id and created_by)
+    const recentRepairsRes = await (supabase
+      .from('repair_jobs') as any)
       .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, service_revenue, created_at, customer:customers!left(full_name), technician:profiles!repair_jobs_technician_id_fkey!left(full_name)')
       .order('created_at', { ascending: false })
       .limit(5);
@@ -147,10 +147,10 @@ export const dashboardService = {
       created_at: r.created_at,
     }));
 
-    // 8. Technician Earnings Summary
-    const snapshotsRes = await supabase
-      .from('repair_profit_snapshots')
-      .select('technician_id, technician_share, technician:profiles!left(full_name)');
+    // 8. Technician Earnings Summary (Explicit constraint hint to resolve ambiguous profiles FKs: technician_id vs finalized_by)
+    const snapshotsRes = await (supabase
+      .from('repair_profit_snapshots') as any)
+      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)');
 
     if (snapshotsRes.error) {
       console.error('Error fetching technician profit snapshots:', snapshotsRes.error);

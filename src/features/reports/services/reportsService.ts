@@ -368,22 +368,21 @@ export const reportsService = {
     const [salesRes, purRes, snapsRes] = await Promise.all([
       supabase.from('sales').select('total_amount').gte('created_at', startDate).lte('created_at', endDate),
       supabase.from('purchases').select('total_amount').gte('created_at', startDate).lte('created_at', endDate),
-      supabase
-        .from('repair_profit_snapshots')
-        .select('*, technician:profiles!left(full_name)')
+      (supabase.from('repair_profit_snapshots') as any)
+        .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)')
         .gte('calculated_at', startDate)
         .lte('calculated_at', endDate),
     ]);
 
-    const salesRevenue = (salesRes.data || []).reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
-    const purchaseValue = (purRes.data || []).reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+    const salesRevenue = (salesRes.data || []).reduce((sum: number, s: any) => sum + Number(s.total_amount || 0), 0);
+    const purchaseValue = (purRes.data || []).reduce((sum: number, p: any) => sum + Number(p.total_amount || 0), 0);
 
     const snaps = snapsRes.data || [];
-    const repairRevenue = snaps.reduce((sum, sn) => sum + Number(sn.service_revenue || 0), 0);
-    const repairPartsCost = snaps.reduce((sum, sn) => sum + Number(sn.parts_cost || 0), 0);
-    const netRepairProfit = snaps.reduce((sum, sn) => sum + Number(sn.net_repair_profit || 0), 0);
-    const ownerRepairShare = snaps.reduce((sum, sn) => sum + Number(sn.owner_share || 0), 0);
-    const technicianRepairShare = snaps.reduce((sum, sn) => sum + Number(sn.technician_share || 0), 0);
+    const repairRevenue = snaps.reduce((sum: number, sn: any) => sum + Number(sn.service_revenue || 0), 0);
+    const repairPartsCost = snaps.reduce((sum: number, sn: any) => sum + Number(sn.parts_cost || 0), 0);
+    const netRepairProfit = snaps.reduce((sum: number, sn: any) => sum + Number(sn.net_repair_profit || 0), 0);
+    const ownerRepairShare = snaps.reduce((sum: number, sn: any) => sum + Number(sn.owner_share || 0), 0);
+    const technicianRepairShare = snaps.reduce((sum: number, sn: any) => sum + Number(sn.technician_share || 0), 0);
 
     // Group tech shares
     const techMap: Record<string, { techName: string; completedJobs: number; techShare: number }> = {};
