@@ -77,7 +77,7 @@ export const customerService = {
   async getCustomerPurchaseHistory(customerId: string): Promise<CustomerPurchaseHistoryItem[]> {
     const { data, error } = await supabase
       .from('sales')
-      .select('id, sale_number, total_amount, payment_method, payment_status, created_at')
+      .select('id, sale_number, total_amount, payment_status, created_at')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
 
@@ -90,35 +90,65 @@ export const customerService = {
       id: s.id,
       sale_number: s.sale_number,
       total_amount: Number(s.total_amount || 0),
-      payment_method: s.payment_method,
-      payment_status: s.payment_status,
+      payment_method: s.payment_status || 'PAID',
+      payment_status: s.payment_status || 'PAID',
       created_at: s.created_at,
     }));
   },
 
   async getCustomerRepairHistory(customerId: string): Promise<CustomerRepairHistoryItem[]> {
-    const { data, error } = await supabase
+    // Outer left join on technician profile to include UNASSIGNED repairs (technician_id IS NULL)
+    const { data: jobs, error: jobsErr } = await supabase
       .from('repair_jobs')
-      .select('id, job_number, device_type, device_brand, reported_problem, status, quoted_amount, total_amount, created_at, technician:profiles!repair_jobs_technician_id_fkey(full_name)')
+      .select('id, job_number, device_type, device_brand, device_model, reported_problem, status, payment_status, quoted_amount, service_revenue, created_at, updated_at, technician:profiles!left(full_name)')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching customer repair history:', error);
+    if (jobsErr) {
+      console.error('Error fetching customer repair history:', jobsErr);
       return [];
     }
 
-    return (data || []).map((r: any) => ({
-      id: r.id,
-      job_number: r.job_number,
-      device_type: r.device_type,
-      device_brand: r.device_brand,
-      reported_problem: r.reported_problem,
-      technician_name: r.technician?.full_name || 'Unassigned',
-      status: r.status,
-      quoted_amount: Number(r.quoted_amount || 0),
-      total_amount: Number(r.total_amount || 0),
-      created_at: r.created_at,
-    }));
+    if (!jobs || jobs.length === 0) {
+      return [];
+    }
+
+    const jobIds = (jobs as any[]).map((j) => j.id);
+
+    // Fetch payments for calculation of collected amount and remaining due
+    const { data: payments } = await supabase
+      .from('repair_payments')
+      .select('repair_id, amount')
+      .in('repair_id', jobIds);
+
+    const paymentMap = new Map<string, number>();
+    (payments || []).forEach((p: any) => {
+      const existing = paymentMap.get(p.repair_id) || 0;
+      paymentMap.set(p.repair_id, existing + Number(p.amount || 0));
+    });
+
+    return (jobs as any[]).map((r: any) => {
+      const revenue = Number(r.service_revenue || r.quoted_amount || 0);
+      const collected = paymentMap.get(r.id) || 0;
+      const remaining = Math.max(0, revenue - collected);
+
+      return {
+        id: r.id,
+        job_number: r.job_number,
+        device_type: r.device_type,
+        device_brand: r.device_brand,
+        device_model: r.device_model || null,
+        reported_problem: r.reported_problem,
+        technician_name: r.technician?.full_name || 'Unassigned',
+        status: r.status,
+        payment_status: r.payment_status || 'UNPAID',
+        quoted_amount: Number(r.quoted_amount || 0),
+        service_revenue: revenue,
+        collected_amount: collected,
+        remaining_due: remaining,
+        created_at: r.created_at,
+        updated_at: r.updated_at || r.created_at,
+      };
+    });
   },
 };

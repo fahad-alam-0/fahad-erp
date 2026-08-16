@@ -39,10 +39,15 @@ export interface CustomerRepairHistoryItem {
   job_number: string;
   device_type: string;
   device_brand: string;
+  device_model?: string | null;
   reported_problem: string;
   technician_name?: string;
   status: string;
+  payment_status: string;
   quoted_amount: number;
-  total_amount: number;
+  service_revenue: number;
+  collected_amount: number;
+  remaining_due: number;
   created_at: string;
+  updated_at: string;
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { RepairJob } from '../types/repair.types';
 import { repairService } from '../services/repairService';
 import { useAuthStore } from '@/store/useAuthStore';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { RepairTable } from '../components/RepairTable';
 import { RepairFormModal } from '../components/RepairFormModal';
 import { RepairDetailModal } from '../components/RepairDetailModal';
@@ -74,6 +75,15 @@ export const RepairsPage: React.FC = () => {
   useEffect(() => {
     loadRepairs();
   }, [loadRepairs]);
+
+  // Realtime Sync: Auto-update repair queue on database changes across all user sessions
+  useRealtimeSubscription(
+    'repairs-page-queue',
+    ['repair_jobs', 'repair_status_history', 'repair_payments'],
+    useCallback(() => {
+      loadRepairs();
+    }, [loadRepairs])
+  );
 
   const handleClaimRepair = async (repair: RepairJob) => {
     try {
@@ -290,8 +300,11 @@ export const RepairsPage: React.FC = () => {
 
       {/* Repair Detail Workspace Modal */}
       <RepairDetailModal
-        isOpen={isDetailModalOpen}
-        onClose={() => setIsDetailModalOpen(false)}
+        isOpen={selectedRepairDetail !== null && isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedRepairDetail(null);
+        }}
         repair={selectedRepairDetail}
         userRole={userRole}
         userId={userId}

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useDashboardData } from '../hooks/useDashboardData';
+import { useRealtimeSubscription } from '@/hooks/useRealtimeSubscription';
 import { StatCard } from '../components/StatCard';
 import { QuickActionsBar } from '../components/QuickActionsBar';
 import { LowStockList } from '../components/LowStockList';
@@ -38,6 +39,15 @@ export const DashboardPage: React.FC = () => {
     await refetch();
     setTimeout(() => setIsRefreshing(false), 500);
   };
+
+  // Realtime Sync: Auto-update dashboard metrics when sales, repair_jobs, purchases, or profit snapshots change
+  useRealtimeSubscription(
+    'dashboard-metrics-realtime',
+    ['sales', 'repair_jobs', 'purchases', 'repair_profit_snapshots'],
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const getGreeting = () => {
     const hour = new Date().getHours();

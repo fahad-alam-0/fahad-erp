@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dashboardService } from '@/features/dashboard/services/dashboardService';
+import { customerService } from '@/features/customer-management/services/customerService';
 import { repairService } from '@/features/repair-management/services/repairService';
 import { supabase } from '@/lib/supabase';
 
@@ -8,6 +9,11 @@ vi.mock('@/lib/supabase', () => ({
     from: vi.fn(),
     rpc: vi.fn(),
     schema: vi.fn(),
+    channel: vi.fn().mockReturnValue({
+      on: vi.fn().mockReturnThis(),
+      subscribe: vi.fn().mockReturnThis(),
+    }),
+    removeChannel: vi.fn(),
   },
 }));
 
@@ -23,7 +29,7 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
 
   it('1. dashboardService uses outer left joins and returns walk-in sales & unassigned repairs', async () => {
     const mockWalkInSales = [
-      { id: 's_01', sale_number: 'INV-20260816-001', total_amount: 250, payment_method: 'CASH', created_at: new Date().toISOString(), customer: null },
+      { id: 's_01', sale_number: 'INV-20260816-001', total_amount: 250, payment_status: 'PAID', created_at: new Date().toISOString(), customer: null },
     ];
     const mockUnassignedRepairs = [
       { id: 'r_01', job_number: 'REP-20260816-001', device_type: 'TV', device_brand: 'Samsung', reported_problem: 'No display', status: 'RECEIVED', quoted_amount: 1000, service_revenue: 1000, created_at: new Date().toISOString(), customer: null, technician: null },
@@ -86,7 +92,44 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
     expect(metrics.recentRepairs[0].technician_name).toBe('Unassigned');
   });
 
-  it('2. repairService.addRepairPayment calls private.add_repair_payment RPC for cash, upi, and card entries', async () => {
+  it('2. customerService.getCustomerRepairHistory uses outer left join and includes unassigned repairs', async () => {
+    const mockRepairs = [
+      { id: 'r_01', job_number: 'REP-001', device_type: 'TV', device_brand: 'LG', reported_problem: 'Black screen', status: 'IN_REPAIR', payment_status: 'UNPAID', quoted_amount: 1000, service_revenue: 1000, created_at: new Date().toISOString(), technician: null },
+    ];
+    const mockPayments = [
+      { repair_id: 'r_01', amount: 400 },
+    ];
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'repair_jobs') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: mockRepairs, error: null }),
+            }),
+          }),
+        } as any;
+      }
+      if (table === 'repair_payments') {
+        return {
+          select: vi.fn().mockReturnValue({
+            in: vi.fn().mockResolvedValue({ data: mockPayments, error: null }),
+          }),
+        } as any;
+      }
+      return {} as any;
+    });
+
+    const history = await customerService.getCustomerRepairHistory('cust_alok');
+
+    expect(history).toHaveLength(1);
+    expect(history[0].job_number).toBe('REP-001');
+    expect(history[0].technician_name).toBe('Unassigned');
+    expect(history[0].collected_amount).toBe(400);
+    expect(history[0].remaining_due).toBe(600);
+  });
+
+  it('3. repairService.addRepairPayment calls private.add_repair_payment RPC for cash, upi, and card entries', async () => {
     mockRpc.mockResolvedValue({ data: null, error: null });
 
     await repairService.addRepairPayment('rep_01', 'CASH', 600, undefined, 'Cash collected');
@@ -106,7 +149,7 @@ describe('Master Repair Workflow & Dashboard Data Consistency Unit Tests', () =>
     }));
   });
 
-  it('3. dashboardService throws explicit error on Supabase query failure', async () => {
+  it('4. dashboardService throws explicit error on Supabase query failure', async () => {
     vi.mocked(supabase.from).mockReturnValue({
       select: vi.fn().mockReturnValue({
         gte: vi.fn().mockResolvedValue({ data: null, error: { message: 'Database query timeout' } }),
