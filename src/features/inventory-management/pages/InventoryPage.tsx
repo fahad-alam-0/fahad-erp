@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
 import { useAuthStore } from '@/store/useAuthStore';
+import { supabase } from '@/lib/supabase';
+import { formatCurrency } from '@/lib/utils';
 import {
   PackagePlus,
   Search,
@@ -18,10 +20,14 @@ import {
   RefreshCw,
   AlertCircle,
   Filter,
+  Coins,
+  TrendingUp,
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
-  const { isInitialized, isAuthenticated } = useAuthStore();
+  const { isInitialized, isAuthenticated, user } = useAuthStore();
+  const userRole = user?.role || 'STAFF';
+  const isOwner = userRole === 'OWNER';
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -103,6 +109,33 @@ export const InventoryPage: React.FC = () => {
     }
   }, [isInitialized, isAuthenticated, loadProducts]);
 
+  // Supabase Realtime channel subscription for live updates on stock, sales, purchases
+  useEffect(() => {
+    if (!isInitialized || !isAuthenticated) return;
+
+    const channel = supabase
+      .channel('inventory-page-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => {
+          loadProducts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'inventory_movements' },
+        () => {
+          loadProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isInitialized, isAuthenticated, loadProducts]);
+
   const handleAddProductClick = () => {
     setEditingProduct(null);
     setIsFormModalOpen(true);
@@ -142,12 +175,23 @@ export const InventoryPage: React.FC = () => {
   const lowStockCount = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold).length;
   const outOfStockCount = products.filter((p) => p.stock_quantity === 0).length;
 
+  // Live monetary inventory valuations
+  const totalInventoryValue = products.reduce(
+    (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.current_cost_price || 0),
+    0
+  );
+  const totalPotentialSalesValue = products.reduce(
+    (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.selling_price || 0),
+    0
+  );
+  const totalPotentialGrossProfit = totalPotentialSalesValue - totalInventoryValue;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
         title="Products & Stock Catalog"
-        subtitle="Manage product catalog, prices, categories, brands, and real-time inventory levels."
+        subtitle="Manage product catalog, prices, weighted-average cost basis, and live monetary inventory value."
         actions={
           <Button onClick={handleAddProductClick} className="flex items-center gap-2">
             <PackagePlus className="w-4 h-4" />
@@ -157,18 +201,48 @@ export const InventoryPage: React.FC = () => {
       />
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-primary/10 text-primary">
-            <Package className="w-6 h-6" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* TOTAL INVENTORY VALUE CARD (Owner Only) */}
+        {isOwner ? (
+          <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/5 shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Total Inventory Value</span>
+              <Coins className="w-4 h-4 text-emerald-500" />
+            </span>
+            <p className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+              {formatCurrency(totalInventoryValue, 'INR')}
+            </p>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+              <span>Potential Retail Value:</span>
+              <span className="font-mono font-bold text-foreground">{formatCurrency(totalPotentialSalesValue, 'INR')}</span>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Active Products</p>
-            <p className="text-2xl font-bold text-foreground mt-0.5">{activeProductsCount}</p>
+        ) : (
+          <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-primary/10 text-primary">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Active Products</p>
+              <p className="text-2xl font-bold text-foreground mt-0.5">{activeProductsCount}</p>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+        {isOwner ? (
+          <div className="p-4 rounded-xl border border-border bg-card shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Potential Gross Margin</span>
+              <TrendingUp className="w-4 h-4 text-primary" />
+            </span>
+            <p className="text-2xl font-bold font-mono text-primary mt-0.5">
+              {formatCurrency(totalPotentialGrossProfit, 'INR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground">Retail profit if all stock is sold</p>
+          </div>
+        ) : null}
+
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
           <div className="p-3 rounded-lg bg-amber-500/10 text-amber-600">
             <AlertTriangle className="w-6 h-6" />
           </div>
@@ -178,7 +252,7 @@ export const InventoryPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-2xs flex items-center gap-4">
           <div className="p-3 rounded-lg bg-destructive/10 text-destructive">
             <AlertCircle className="w-6 h-6" />
           </div>
@@ -305,6 +379,7 @@ export const InventoryPage: React.FC = () => {
           onEdit={handleEditClick}
           onAdjustStock={handleAdjustStockClick}
           onViewDetails={handleViewDetailsClick}
+          userRole={userRole}
         />
       )}
 
