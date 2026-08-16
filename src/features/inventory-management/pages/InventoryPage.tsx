@@ -8,6 +8,7 @@ import { ProductDetailDrawer } from '../components/ProductDetailDrawer';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
+import { useAuthStore } from '@/store/useAuthStore';
 import {
   PackagePlus,
   Search,
@@ -20,6 +21,8 @@ import {
 } from 'lucide-react';
 
 export const InventoryPage: React.FC = () => {
+  const { isInitialized, isAuthenticated } = useAuthStore();
+
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -52,8 +55,10 @@ export const InventoryPage: React.FC = () => {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Load Categories & Brands on mount
+  // Load Categories & Brands ONLY when auth is fully initialized and user is authenticated
   useEffect(() => {
+    if (!isInitialized || !isAuthenticated) return;
+
     const loadMeta = async () => {
       try {
         const [cData, bData] = await Promise.all([
@@ -67,10 +72,12 @@ export const InventoryPage: React.FC = () => {
       }
     };
     loadMeta();
-  }, []);
+  }, [isInitialized, isAuthenticated]);
 
-  // Fetch Products based on search & filters
+  // Fetch Products based on search & filters ONLY when authenticated
   const loadProducts = useCallback(async () => {
+    if (!isInitialized || !isAuthenticated) return;
+
     try {
       setIsLoading(true);
       setError(null);
@@ -88,11 +95,13 @@ export const InventoryPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [debouncedSearch, selectedCategory, selectedBrand, stockStatusFilter]);
+  }, [isInitialized, isAuthenticated, debouncedSearch, selectedCategory, selectedBrand, stockStatusFilter]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (isInitialized && isAuthenticated) {
+      loadProducts();
+    }
+  }, [isInitialized, isAuthenticated, loadProducts]);
 
   const handleAddProductClick = () => {
     setEditingProduct(null);
@@ -116,223 +125,190 @@ export const InventoryPage: React.FC = () => {
 
   const handleSaveProduct = async (input: CreateProductInput | UpdateProductInput) => {
     if (editingProduct) {
-      await inventoryService.updateProduct(editingProduct.id, input);
+      await inventoryService.updateProduct(editingProduct.id, input as UpdateProductInput);
     } else {
       await inventoryService.createProduct(input as CreateProductInput);
     }
+    setIsFormModalOpen(false);
     loadProducts();
   };
 
-  const handleStockAdjustmentSuccess = () => {
+  const handleAdjustSuccess = async () => {
+    setIsAdjustModalOpen(false);
     loadProducts();
-    if (selectedProductForDetail) {
-      // Refresh detail view
-      inventoryService.getProductById(selectedProductForDetail.id).then((p) => {
-        if (p) setSelectedProductForDetail(p);
-      });
-    }
   };
 
-  // Metrics
-  const totalProductsCount = products.length;
-  const lowStockCount = products.filter(
-    (p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold
-  ).length;
+  const activeProductsCount = products.length;
+  const lowStockCount = products.filter((p) => p.stock_quantity > 0 && p.stock_quantity <= p.low_stock_threshold).length;
   const outOfStockCount = products.filter((p) => p.stock_quantity === 0).length;
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* Header */}
       <PageHeader
         title="Products & Stock Catalog"
-        subtitle="Manage spare parts, accessories, stock counts, category thresholds, and inventory movements."
+        subtitle="Manage product catalog, prices, categories, brands, and real-time inventory levels."
         actions={
-          <Button
-            onClick={handleAddProductClick}
-            size="sm"
-            className="flex items-center space-x-1.5 text-xs pressable"
-          >
-            <PackagePlus className="h-4 w-4 shrink-0" />
-            <span>Add New Product</span>
+          <Button onClick={handleAddProductClick} className="flex items-center gap-2">
+            <PackagePlus className="w-4 h-4" />
+            Add New Product
           </Button>
         }
       />
 
-      {/* KPI Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Active Catalog Items
-            </span>
-            <span className="text-xl font-bold font-mono text-foreground">
-              {totalProductsCount} Products
-            </span>
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-primary/10 text-primary">
+            <Package className="w-6 h-6" />
           </div>
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <Package className="w-5 h-5" />
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Active Products</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{activeProductsCount}</p>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Low Stock Items
-            </span>
-            <span className="text-xl font-bold font-mono text-amber-500">
-              {lowStockCount} Items
-            </span>
+        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-amber-500/10 text-amber-600">
+            <AlertTriangle className="w-6 h-6" />
           </div>
-          <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-            <AlertTriangle className="w-5 h-5" />
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Low Stock Items</p>
+            <p className="text-2xl font-bold text-amber-600 mt-0.5">{lowStockCount}</p>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Out of Stock Items
-            </span>
-            <span className="text-xl font-bold font-mono text-destructive">
-              {outOfStockCount} Items
-            </span>
+        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-destructive/10 text-destructive">
+            <AlertCircle className="w-6 h-6" />
           </div>
-          <div className="p-2 rounded-lg bg-destructive/10 text-destructive">
-            <AlertCircle className="w-5 h-5" />
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Out of Stock</p>
+            <p className="text-2xl font-bold text-destructive mt-0.5">{outOfStockCount}</p>
           </div>
         </div>
       </div>
 
-      {/* Search & Filters Bar */}
-      <div className="p-4 rounded-xl bg-card border border-border space-y-3 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
+      {/* Filter & Search Bar */}
+      <div className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search by product name or SKU / product code..."
+              placeholder="Search by product name or code..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full text-xs pl-9 pr-8 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+              className="w-full pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="text-muted-foreground hover:text-foreground absolute right-2.5 top-2.5"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs text-muted-foreground">
-            <span className="font-mono font-medium">{products.length} Products</span>
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5 min-w-[150px]">
+              <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                <Filter className="w-3.5 h-3.5" /> Category:
+              </span>
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="py-1.5 px-2.5 text-xs rounded-lg border border-input bg-background font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="ALL">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Brand Filter */}
+            <div className="flex items-center gap-1.5 min-w-[140px]">
+              <span className="text-xs text-muted-foreground font-medium">Brand:</span>
+              <select
+                value={selectedBrand}
+                onChange={(e) => setSelectedBrand(e.target.value)}
+                className="py-1.5 px-2.5 text-xs rounded-lg border border-input bg-background font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="ALL">All Brands</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Stock Status Filter */}
+            <div className="flex items-center gap-1.5 min-w-[140px]">
+              <span className="text-xs text-muted-foreground font-medium">Status:</span>
+              <select
+                value={stockStatusFilter}
+                onChange={(e) => setStockStatusFilter(e.target.value as any)}
+                className="py-1.5 px-2.5 text-xs rounded-lg border border-input bg-background font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="ALL">All Stock</option>
+                <option value="IN_STOCK">In Stock</option>
+                <option value="LOW_STOCK">Low Stock</option>
+                <option value="OUT_OF_STOCK">Out of Stock</option>
+              </select>
+            </div>
+
+            {/* Refresh */}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={loadProducts}
+              onClick={() => loadProducts()}
               disabled={isLoading}
-              className="h-8 px-2.5 text-xs pressable"
+              className="flex items-center gap-1.5 text-xs"
             >
-              <RefreshCw
-                className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-primary' : ''}`}
-              />
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
           </div>
-        </div>
-
-        {/* Filter Dropdowns Bar */}
-        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border/60 text-xs">
-          <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-            <Filter className="w-3 h-3" /> Filters:
-          </span>
-
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-          >
-            <option value="ALL">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedBrand}
-            onChange={(e) => setSelectedBrand(e.target.value)}
-            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-          >
-            <option value="ALL">All Brands</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={stockStatusFilter}
-            onChange={(e) => setStockStatusFilter(e.target.value as any)}
-            className="text-xs px-2.5 py-1 bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
-          >
-            <option value="ALL">All Stock Statuses</option>
-            <option value="IN_STOCK">In Stock</option>
-            <option value="LOW_STOCK">Low Stock</option>
-            <option value="OUT_OF_STOCK">Out of Stock</option>
-          </select>
         </div>
       </div>
 
-      {/* Main Table Content */}
+      {/* Main Content Area */}
       {error ? (
-        <div className="p-6 rounded-xl bg-destructive/10 border border-destructive/20 text-center text-xs text-destructive space-y-2">
-          <AlertCircle className="w-6 h-6 mx-auto" />
-          <p className="font-semibold">{error}</p>
-          <Button variant="outline" size="sm" onClick={loadProducts}>
-            Retry Loading Catalog
+        <div className="p-6 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive space-y-3">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-5 h-5" />
+            <span>Error Loading Inventory</span>
+          </div>
+          <p className="text-sm">{error}</p>
+          <Button variant="outline" size="sm" onClick={() => loadProducts()} className="mt-2">
+            Try Again
           </Button>
         </div>
       ) : isLoading ? (
-        <div className="space-y-3">
-          <SkeletonPlaceholder className="h-12 w-full rounded-xl" />
-          <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
-          <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
-        </div>
-      ) : products.length === 0 ? (
-        <div className="py-16 px-4 text-center border border-dashed border-border rounded-2xl bg-card/40 flex flex-col items-center gap-2">
-          <div className="p-3 rounded-full bg-muted text-muted-foreground">
-            <Package className="w-8 h-8" />
-          </div>
-          <h3 className="text-sm font-bold text-foreground">
-            {searchQuery || selectedCategory !== 'ALL' || selectedBrand !== 'ALL'
-              ? 'No matching catalog products found'
-              : 'No products in inventory catalog yet'}
-          </h3>
-          <p className="text-xs text-muted-foreground max-w-sm">
-            {searchQuery || selectedCategory !== 'ALL' || selectedBrand !== 'ALL'
-              ? 'Try adjusting your search filters or clearing dropdown selections.'
-              : 'Add your first product, spare part, or accessory to begin managing inventory.'}
-          </p>
-          {!searchQuery && stockStatusFilter === 'ALL' && (
-            <Button onClick={handleAddProductClick} size="sm" className="mt-2 text-xs pressable">
-              <PackagePlus className="w-3.5 h-3.5 mr-1.5" />
-              <span>Add First Product</span>
-            </Button>
-          )}
+        <div className="p-6 rounded-xl border border-border bg-card shadow-sm space-y-4">
+          <SkeletonPlaceholder className="h-8 w-full rounded" />
+          <SkeletonPlaceholder className="h-12 w-full rounded" />
+          <SkeletonPlaceholder className="h-12 w-full rounded" />
+          <SkeletonPlaceholder className="h-12 w-full rounded" />
         </div>
       ) : (
         <ProductTable
           products={products}
-          onViewDetails={handleViewDetailsClick}
           onEdit={handleEditClick}
           onAdjustStock={handleAdjustStockClick}
+          onViewDetails={handleViewDetailsClick}
         />
       )}
 
-      {/* Product Form Modal */}
+      {/* Product Form Modal (Create / Edit) */}
       <ProductFormModal
         isOpen={isFormModalOpen}
         product={editingProduct}
@@ -344,22 +320,28 @@ export const InventoryPage: React.FC = () => {
         onBrandCreated={(newBrand) => setBrands((prev) => [...prev, newBrand])}
       />
 
-      {/* Stock Adjustment RPC Modal */}
+      {/* Stock Adjustment Modal */}
       <StockAdjustmentModal
         isOpen={isAdjustModalOpen}
         product={adjustTargetProduct}
         products={products}
         onClose={() => setIsAdjustModalOpen(false)}
-        onSuccess={handleStockAdjustmentSuccess}
+        onSuccess={handleAdjustSuccess}
       />
 
       {/* Product Detail Drawer */}
       <ProductDetailDrawer
         isOpen={isDetailDrawerOpen}
-        product={selectedProductForDetail}
         onClose={() => setIsDetailDrawerOpen(false)}
-        onEdit={handleEditClick}
-        onAdjustStock={handleAdjustStockClick}
+        product={selectedProductForDetail}
+        onEdit={(p) => {
+          setIsDetailDrawerOpen(false);
+          handleEditClick(p);
+        }}
+        onAdjustStock={(p) => {
+          setIsDetailDrawerOpen(false);
+          handleAdjustStockClick(p);
+        }}
       />
     </div>
   );

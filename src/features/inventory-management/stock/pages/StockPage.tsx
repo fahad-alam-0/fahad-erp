@@ -9,9 +9,12 @@ import { NewPurchaseModal } from '../../purchasing/components/NewPurchaseModal';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
-import { ShoppingCart, RefreshCw, AlertCircle, Building2 } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { ShoppingCart, AlertCircle, Building2 } from 'lucide-react';
 
 export const StockPage: React.FC = () => {
+  const { isInitialized, isAuthenticated } = useAuthStore();
+
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -23,6 +26,7 @@ export const StockPage: React.FC = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const loadData = async () => {
+    if (!isInitialized || !isAuthenticated) return;
     try {
       setIsLoading(true);
       setError(null);
@@ -43,8 +47,10 @@ export const StockPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (isInitialized && isAuthenticated) {
+      loadData();
+    }
+  }, [isInitialized, isAuthenticated]);
 
   const handleViewDetails = (purchase: Purchase) => {
     setSelectedPurchaseDetail(purchase);
@@ -57,50 +63,52 @@ export const StockPage: React.FC = () => {
         title="Stock Procurement & Orders"
         subtitle="Monitor inventory stock purchases, supplier purchase orders, and warehouse receiving."
         actions={
-          <Button
-            onClick={() => setIsNewPurchaseOpen(true)}
-            size="sm"
-            className="flex items-center space-x-1.5 text-xs pressable"
-          >
-            <ShoppingCart className="h-4 w-4 shrink-0" />
-            <span>New Purchase Order</span>
+          <Button onClick={() => setIsNewPurchaseOpen(true)} className="flex items-center gap-2">
+            <ShoppingCart className="w-4 h-4" />
+            Create Purchase Order
           </Button>
         }
       />
 
-      <div className="flex items-center justify-between p-4 rounded-xl bg-card border border-border shadow-2xs">
-        <div className="flex items-center space-x-3 text-xs">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary border border-primary/20">
-            <Building2 className="w-4 h-4" />
+      {/* Overview stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-primary/10 text-primary">
+            <ShoppingCart className="w-6 h-6" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">
-              {suppliers.length} Registered Suppliers • {products.length} Active Catalog Products
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              Executing a purchase order atomically updates stock quantities and current cost prices.
-            </p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Purchase Orders</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{purchases.length}</p>
           </div>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={loadData} disabled={isLoading} className="h-8 px-2 text-xs pressable">
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-primary' : ''}`} />
-        </Button>
+        <div className="p-4 rounded-xl border border-border bg-card shadow-sm flex items-center gap-4">
+          <div className="p-3 rounded-lg bg-blue-500/10 text-blue-600">
+            <Building2 className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Active Suppliers</p>
+            <p className="text-2xl font-bold text-blue-600 mt-0.5">{suppliers.length}</p>
+          </div>
+        </div>
       </div>
 
       {error ? (
-        <div className="p-6 rounded-xl bg-destructive/10 border border-destructive/20 text-center text-xs text-destructive space-y-2">
-          <AlertCircle className="w-6 h-6 mx-auto" />
-          <p className="font-semibold">{error}</p>
-          <Button variant="outline" size="sm" onClick={loadData}>
-            Retry Loading
+        <div className="p-6 rounded-xl border border-destructive/30 bg-destructive/5 text-destructive space-y-3">
+          <div className="flex items-center gap-2 font-bold">
+            <AlertCircle className="w-5 h-5" />
+            <span>Error Loading Procurement Data</span>
+          </div>
+          <p className="text-sm">{error}</p>
+          <Button variant="outline" size="sm" onClick={() => loadData()} className="mt-2">
+            Try Again
           </Button>
         </div>
       ) : isLoading ? (
-        <div className="space-y-3">
-          <SkeletonPlaceholder className="h-12 w-full rounded-xl" />
-          <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
-          <SkeletonPlaceholder className="h-16 w-full rounded-xl" />
+        <div className="p-6 rounded-xl border border-border bg-card shadow-sm space-y-4">
+          <SkeletonPlaceholder className="h-8 w-full rounded" />
+          <SkeletonPlaceholder className="h-12 w-full rounded" />
+          <SkeletonPlaceholder className="h-12 w-full rounded" />
         </div>
       ) : (
         <PurchaseTable purchases={purchases} onViewDetails={handleViewDetails} />
@@ -109,17 +117,20 @@ export const StockPage: React.FC = () => {
       {/* New Purchase Modal */}
       <NewPurchaseModal
         isOpen={isNewPurchaseOpen}
+        onClose={() => setIsNewPurchaseOpen(false)}
+        onSuccess={async () => {
+          setIsNewPurchaseOpen(false);
+          loadData();
+        }}
         suppliers={suppliers}
         products={products}
-        onClose={() => setIsNewPurchaseOpen(false)}
-        onSuccess={loadData}
       />
 
       {/* Purchase Detail Modal */}
       <PurchaseDetailModal
         isOpen={isDetailModalOpen}
-        purchase={selectedPurchaseDetail}
         onClose={() => setIsDetailModalOpen(false)}
+        purchase={selectedPurchaseDetail}
       />
     </div>
   );
