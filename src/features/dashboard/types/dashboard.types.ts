@@ -1,10 +1,36 @@
+export interface RecentSaleItemProductLine {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_code: string | null;
+  quantity: number;
+  unit_selling_price: number;
+  total_selling_amount: number;
+}
+
+export interface RecentSaleItemPaymentLine {
+  id: string;
+  payment_method: 'CASH' | 'UPI' | 'CARD';
+  amount: number;
+  payment_reference?: string | null;
+}
+
 export interface RecentSaleItem {
   id: string;
   sale_number: string;
   customer_name: string;
+  customer_phone?: string | null;
+  subtotal: number;
+  discount: number;
   total_amount: number;
-  payment_method: string;
+  payment_status: string;
   created_at: string;
+  items: RecentSaleItemProductLine[];
+  payments: RecentSaleItemPaymentLine[];
+  products_summary: string;
+  payment_summary: string;
+  total_quantity: number;
+  unit_price_display: number;
 }
 
 export interface RecentRepairItem {

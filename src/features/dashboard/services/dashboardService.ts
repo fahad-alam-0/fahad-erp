@@ -4,6 +4,8 @@ import {
   TechnicianDashboardMetrics,
   StaffDashboardMetrics,
   RecentSaleItem,
+  RecentSaleItemProductLine,
+  RecentSaleItemPaymentLine,
   RecentRepairItem,
   RecentPurchaseItem,
   LowStockProductItem,
@@ -14,6 +16,64 @@ export const getTodayStartISO = (): string => {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
   return now.toISOString();
+};
+
+const mapRecentSalesPayload = (dataList: any[]): RecentSaleItem[] => {
+  return dataList.map((s: any) => {
+    const rawItems = s.items || [];
+    const mappedItems: RecentSaleItemProductLine[] = rawItems.map((item: any) => ({
+      id: item.id,
+      product_id: item.product_id,
+      product_name: item.product?.name || 'Product',
+      product_code: item.product?.product_code || null,
+      quantity: Number(item.quantity || 1),
+      unit_selling_price: Number(item.unit_selling_price || 0),
+      total_selling_amount: Number(item.total_selling_amount || 0),
+    }));
+
+    const rawPayments = s.payments || [];
+    const mappedPayments: RecentSaleItemPaymentLine[] = rawPayments.map((pay: any) => ({
+      id: pay.id,
+      payment_method: pay.payment_method || 'CASH',
+      amount: Number(pay.amount || 0),
+      payment_reference: pay.payment_reference || null,
+    }));
+
+    const productsSummary = mappedItems.length > 0
+      ? mappedItems
+          .map((item) => `${item.product_name}${item.quantity > 1 ? ` × ${item.quantity}` : ''}`)
+          .join(', ')
+      : 'Product';
+
+    const paymentSummary = mappedPayments.length > 0
+      ? mappedPayments
+          .map((pay) => `${pay.payment_method} ₹${pay.amount.toLocaleString('en-IN')}`)
+          .join(', ')
+      : 'PAID';
+
+    const totalQty = mappedItems.reduce((sum, item) => sum + item.quantity, 0);
+    const unitPriceDisplay = mappedItems.length > 0
+      ? mappedItems[0].unit_selling_price
+      : Number(s.total_amount || 0);
+
+    return {
+      id: s.id,
+      sale_number: s.sale_number,
+      customer_name: s.customer?.full_name || 'Walk-in Customer',
+      customer_phone: s.customer?.phone || null,
+      subtotal: Number(s.subtotal || s.total_amount || 0),
+      discount: Number(s.discount || 0),
+      total_amount: Number(s.total_amount || 0),
+      payment_status: s.payment_status || 'PAID',
+      created_at: s.created_at,
+      items: mappedItems,
+      payments: mappedPayments,
+      products_summary: productsSummary,
+      payment_summary: paymentSummary,
+      total_quantity: totalQty > 0 ? totalQty : 1,
+      unit_price_display: unitPriceDisplay,
+    };
+  });
 };
 
 export const dashboardService = {
@@ -100,10 +160,33 @@ export const dashboardService = {
         selling_price: Number(p.selling_price || 0),
       }));
 
-    // 6. Recent Sales
-    const recentSalesRes = await supabase
-      .from('sales')
-      .select('id, sale_number, total_amount, payment_status, created_at, customer:customers!left(full_name)')
+    // 6. Recent Sales with Embedded Product Lines and Payment Methods
+    const recentSalesRes = await (supabase
+      .from('sales') as any)
+      .select(`
+        id,
+        sale_number,
+        subtotal,
+        discount,
+        total_amount,
+        payment_status,
+        created_at,
+        customer:customers!left(id, full_name, phone),
+        items:sale_items(
+          id,
+          product_id,
+          quantity,
+          unit_selling_price,
+          total_selling_amount,
+          product:products!left(id, name, product_code)
+        ),
+        payments:sale_payments(
+          id,
+          payment_method,
+          amount,
+          payment_reference
+        )
+      `)
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -112,14 +195,7 @@ export const dashboardService = {
       throw new Error(`Failed to fetch recent sales list: ${recentSalesRes.error.message}`);
     }
 
-    const recentSales: RecentSaleItem[] = (recentSalesRes.data || []).map((s: any) => ({
-      id: s.id,
-      sale_number: s.sale_number,
-      customer_name: s.customer?.full_name || 'Walk-in Customer',
-      total_amount: Number(s.total_amount || 0),
-      payment_method: s.payment_status || 'PAID',
-      created_at: s.created_at,
-    }));
+    const recentSales: RecentSaleItem[] = mapRecentSalesPayload(recentSalesRes.data || []);
 
     // 7. Recent Repairs (Explicit foreign key hint to prevent PostgREST ambiguity between technician_id and created_by)
     const recentRepairsRes = await (supabase
@@ -164,7 +240,6 @@ export const dashboardService = {
       const techRole = snap.technician?.role || 'TECHNICIAN';
       const share = Number(snap.technician_share || 0);
 
-      // Filter: Only include TECHNICIAN role profiles or non-zero payout shares in the Technician Payout Roster
       if (techRole === 'TECHNICIAN' || share > 0) {
         const existing = techMap.get(techId) || { name: techName, role: techRole, jobs: 0, total: 0 };
         existing.jobs += 1;
@@ -354,10 +429,33 @@ export const dashboardService = {
         selling_price: Number(p.selling_price || 0),
       }));
 
-    // 6. Recent Sales
-    const recentSalesRes = await supabase
-      .from('sales')
-      .select('id, sale_number, total_amount, payment_status, created_at, customer:customers!left(full_name)')
+    // 6. Recent Sales with Embedded Product Lines and Payment Methods
+    const recentSalesRes = await (supabase
+      .from('sales') as any)
+      .select(`
+        id,
+        sale_number,
+        subtotal,
+        discount,
+        total_amount,
+        payment_status,
+        created_at,
+        customer:customers!left(id, full_name, phone),
+        items:sale_items(
+          id,
+          product_id,
+          quantity,
+          unit_selling_price,
+          total_selling_amount,
+          product:products!left(id, name, product_code)
+        ),
+        payments:sale_payments(
+          id,
+          payment_method,
+          amount,
+          payment_reference
+        )
+      `)
       .order('created_at', { ascending: false })
       .limit(5);
 
@@ -365,14 +463,7 @@ export const dashboardService = {
       throw new Error(`Failed to fetch staff recent sales: ${recentSalesRes.error.message}`);
     }
 
-    const recentSales: RecentSaleItem[] = (recentSalesRes.data || []).map((s: any) => ({
-      id: s.id,
-      sale_number: s.sale_number,
-      customer_name: s.customer?.full_name || 'Walk-in Customer',
-      total_amount: Number(s.total_amount || 0),
-      payment_method: s.payment_status || 'PAID',
-      created_at: s.created_at,
-    }));
+    const recentSales: RecentSaleItem[] = mapRecentSalesPayload(recentSalesRes.data || []);
 
     // 7. Recent Repairs
     const recentRepairsRes = await supabase
