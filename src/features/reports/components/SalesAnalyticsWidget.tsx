@@ -1,14 +1,16 @@
 import React from 'react';
 import { SalesAnalytics } from '../types/reports.types';
 import { formatCurrency } from '@/lib/utils';
-import { ShoppingCart, TrendingUp, CreditCard, Banknote, QrCode, Package } from 'lucide-react';
+import { ShoppingCart, TrendingUp, CreditCard, Banknote, QrCode, Package, Coins, Percent } from 'lucide-react';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SalesAnalyticsWidgetProps {
   data: SalesAnalytics | null;
   isLoading: boolean;
+  userRole?: string;
 }
 
-export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data, isLoading }) => {
+export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data, isLoading, userRole = 'OWNER' }) => {
   if (isLoading || !data) {
     return (
       <div className="p-6 rounded-xl border border-border bg-card animate-pulse space-y-4">
@@ -19,11 +21,13 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
   }
 
   const maxTrendRevenue = Math.max(...data.salesTrend.map((t) => t.revenue), 1);
+  const prof = data.productProfitability;
+  const isOwner = userRole === 'OWNER';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
         <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
           <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
             <span>Sales Revenue</span>
@@ -56,7 +60,105 @@ export const SalesAnalyticsWidget: React.FC<SalesAnalyticsWidgetProps> = ({ data
           </p>
           <p className="text-[10px] text-muted-foreground">Revenue per receipt</p>
         </div>
+
+        {isOwner && prof && (
+          <div className="p-4 rounded-xl bg-card border border-border shadow-2xs space-y-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center justify-between">
+              <span>Actual Gross Profit</span>
+              <Coins className="w-4 h-4 text-emerald-500" />
+            </span>
+            <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(prof.totalGrossProfit, 'INR')}
+            </p>
+            <p className="text-[10px] text-muted-foreground font-mono font-bold flex items-center gap-1">
+              <Percent className="w-3 h-3 text-primary" />
+              <span>{prof.overallMarginPct.toFixed(2)}% Gross Margin</span>
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Product-Level Sales Profitability Analysis (Owner Only) */}
+      {isOwner && prof && (
+        <Card className="border-border bg-card overflow-hidden">
+          <CardHeader className="p-4 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Coins className="w-4 h-4 text-emerald-500" />
+              <span>PRODUCT-LEVEL SALES PROFITABILITY ANALYSIS</span>
+            </CardTitle>
+            <span className="text-[10px] font-mono text-muted-foreground px-2 py-0.5 bg-muted rounded border border-border">
+              Historical Cost Basis (sale_items.unit_cost_price)
+            </span>
+          </CardHeader>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-muted/40 text-muted-foreground text-[10px] uppercase font-semibold border-b border-border">
+                <tr>
+                  <th className="p-3 font-sans">Product</th>
+                  <th className="p-3 text-center font-sans">Qty Sold</th>
+                  <th className="p-3 text-right font-sans">Actual Cost</th>
+                  <th className="p-3 text-right font-sans">Selling Revenue</th>
+                  <th className="p-3 text-right font-sans">Gross Profit</th>
+                  <th className="p-3 text-right font-sans">Margin %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {prof.products.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground italic font-sans">
+                      No product sales recorded in this date window.
+                    </td>
+                  </tr>
+                ) : (
+                  prof.products.map((item) => (
+                    <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-3 font-semibold text-foreground font-sans">
+                        {item.name}
+                        {item.code && (
+                          <span className="text-[10px] text-muted-foreground block font-mono">
+                            {item.code}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center font-bold text-foreground">{item.qtySold}</td>
+                      <td className="p-3 text-right text-rose-600 dark:text-rose-400">
+                        {formatCurrency(item.actualCost, 'INR')}
+                      </td>
+                      <td className="p-3 text-right font-bold text-foreground">
+                        {formatCurrency(item.sellingRevenue, 'INR')}
+                      </td>
+                      <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(item.grossProfit, 'INR')}
+                      </td>
+                      <td className="p-3 text-right font-bold text-primary">
+                        {item.profitMarginPct.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {prof.products.length > 0 && (
+                <tfoot className="bg-muted/50 font-bold border-t-2 border-border text-foreground">
+                  <tr>
+                    <td className="p-3 font-sans uppercase">Total Summary</td>
+                    <td className="p-3 text-center text-primary">{prof.totalQtySold} pcs</td>
+                    <td className="p-3 text-right text-rose-600 dark:text-rose-400">
+                      {formatCurrency(prof.totalActualCost, 'INR')}
+                    </td>
+                    <td className="p-3 text-right">{formatCurrency(prof.totalSellingRevenue, 'INR')}</td>
+                    <td className="p-3 text-right text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(prof.totalGrossProfit, 'INR')}
+                    </td>
+                    <td className="p-3 text-right text-primary">
+                      {prof.overallMarginPct.toFixed(2)}%
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </Card>
+      )}
 
       {/* Sales Revenue Trend Graph */}
       <div className="p-4 rounded-xl bg-card border border-border space-y-3 shadow-2xs">

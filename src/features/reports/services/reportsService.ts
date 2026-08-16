@@ -8,6 +8,10 @@ import {
   OwnerFinancialOverview,
   WorkerServicePerformance,
   RepairServicePerformanceReport,
+  ProductProfitabilityItem,
+  ProductProfitabilitySummary,
+  InventoryValuationItem,
+  InventoryValuationSummary,
 } from '../types/reports.types';
 
 export const reportsService = {
@@ -131,34 +135,88 @@ export const reportsService = {
       }));
     }
 
-    // Top products sold
+    // Top products sold & product profitability (historical cost + revenue + margin)
     let topProducts: { id: string; name: string; code: string | null; qtySold: number; revenue: number }[] = [];
+    const prodMap: Record<
+      string,
+      { name: string; code: string | null; qtySold: number; actualCost: number; sellingRevenue: number }
+    > = {};
+
     if (saleIds.length > 0) {
       const { data: items } = await supabase
         .from('sale_items')
-        .select('product_id, quantity, total_selling_amount, product:products(name, product_code)')
+        .select('sale_id, product_id, quantity, unit_selling_price, unit_cost_price, total_selling_amount, product:products(name, product_code)')
         .in('sale_id', saleIds);
 
-      const prodMap: Record<string, { name: string; code: string | null; qtySold: number; revenue: number }> = {};
+      // Lookup map for parent sale discount factor
+      const saleDiscountRatioMap = new Map<string, number>();
+      salesList.forEach((s) => {
+        const sub = Number(s.subtotal || s.total_amount || 0);
+        const tot = Number(s.total_amount || 0);
+        const ratio = sub > 0 ? tot / sub : 1;
+        saleDiscountRatioMap.set(s.id, ratio);
+      });
+
       (items || []).forEach((item: any) => {
         const pid = item.product_id;
+        const qty = Number(item.quantity || 0);
+        const unitCost = Number(item.unit_cost_price || 0);
+        const unadjustedRev = Number(item.total_selling_amount || qty * Number(item.unit_selling_price || 0));
+        const ratio = saleDiscountRatioMap.get(item.sale_id) ?? 1;
+        const lineRevenue = unadjustedRev * ratio;
+        const lineCost = qty * unitCost;
+
         if (!prodMap[pid]) {
           prodMap[pid] = {
             name: item.product?.name || 'Product',
             code: item.product?.product_code || null,
             qtySold: 0,
-            revenue: 0,
+            actualCost: 0,
+            sellingRevenue: 0,
           };
         }
-        prodMap[pid].qtySold += Number(item.quantity || 0);
-        prodMap[pid].revenue += Number(item.total_selling_amount || 0);
+
+        prodMap[pid].qtySold += qty;
+        prodMap[pid].actualCost += lineCost;
+        prodMap[pid].sellingRevenue += lineRevenue;
       });
 
       topProducts = Object.keys(prodMap)
-        .map((pid) => ({ id: pid, ...prodMap[pid] }))
+        .map((pid) => ({ id: pid, name: prodMap[pid].name, code: prodMap[pid].code, qtySold: prodMap[pid].qtySold, revenue: prodMap[pid].sellingRevenue }))
         .sort((a, b) => b.qtySold - a.qtySold)
         .slice(0, 5);
     }
+
+    const profitabilityProducts: ProductProfitabilityItem[] = Object.keys(prodMap).map((pid) => {
+      const p = prodMap[pid];
+      const grossProfit = p.sellingRevenue - p.actualCost;
+      const profitMarginPct = p.sellingRevenue > 0 ? (grossProfit / p.sellingRevenue) * 100 : 0;
+      return {
+        id: pid,
+        name: p.name,
+        code: p.code,
+        qtySold: p.qtySold,
+        actualCost: p.actualCost,
+        sellingRevenue: p.sellingRevenue,
+        grossProfit,
+        profitMarginPct,
+      };
+    }).sort((a, b) => b.sellingRevenue - a.sellingRevenue);
+
+    const totalQtySold = profitabilityProducts.reduce((sum, p) => sum + p.qtySold, 0);
+    const totalActualCost = profitabilityProducts.reduce((sum, p) => sum + p.actualCost, 0);
+    const totalSellingRevenue = profitabilityProducts.reduce((sum, p) => sum + p.sellingRevenue, 0);
+    const totalGrossProfit = totalSellingRevenue - totalActualCost;
+    const overallMarginPct = totalSellingRevenue > 0 ? (totalGrossProfit / totalSellingRevenue) * 100 : 0;
+
+    const productProfitability: ProductProfitabilitySummary = {
+      totalQtySold,
+      totalActualCost,
+      totalSellingRevenue,
+      totalGrossProfit,
+      overallMarginPct,
+      products: profitabilityProducts,
+    };
 
     return {
       totalRevenue,
@@ -167,6 +225,7 @@ export const reportsService = {
       salesTrend,
       paymentMethodBreakdown,
       topProducts,
+      productProfitability,
     };
   },
 
@@ -235,7 +294,7 @@ export const reportsService = {
 
   async getInventoryAnalytics(): Promise<InventoryAnalytics> {
     const [prodsRes, movesRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true),
+      supabase.from('products').select('id, name, product_code, stock_quantity, low_stock_threshold, unit, current_cost_price, selling_price, is_active').eq('is_active', true),
       supabase.from('inventory_movements').select('movement_type, quantity').limit(300),
     ]);
 
@@ -285,12 +344,48 @@ export const reportsService = {
       totalQty: moveMap[type].totalQty,
     }));
 
+    // Inventory Valuation Calculation (Current Stock * Current Cost Price)
+    const valuationItems: InventoryValuationItem[] = prods.map((p: any) => {
+      const stock = Number(p.stock_quantity || 0);
+      const costPrice = Number(p.current_cost_price || 0);
+      const sellingPrice = Number(p.selling_price || 0);
+      const inventoryCostValue = stock * costPrice;
+      const potentialSalesValue = stock * sellingPrice;
+      const potentialGrossMargin = potentialSalesValue - inventoryCostValue;
+
+      return {
+        id: p.id,
+        name: p.name,
+        code: p.product_code,
+        stockQuantity: stock,
+        currentCostPrice: costPrice,
+        currentSellingPrice: sellingPrice,
+        inventoryCostValue,
+        potentialSalesValue,
+        potentialGrossMargin,
+      };
+    }).sort((a, b) => b.inventoryCostValue - a.inventoryCostValue);
+
+    const totalInventoryUnits = valuationItems.reduce((sum, i) => sum + i.stockQuantity, 0);
+    const totalInventoryCostValue = valuationItems.reduce((sum, i) => sum + i.inventoryCostValue, 0);
+    const totalPotentialSalesValue = valuationItems.reduce((sum, i) => sum + i.potentialSalesValue, 0);
+    const totalPotentialGrossMargin = totalPotentialSalesValue - totalInventoryCostValue;
+
+    const inventoryValuation: InventoryValuationSummary = {
+      totalInventoryUnits,
+      totalInventoryCostValue,
+      totalPotentialSalesValue,
+      totalPotentialGrossMargin,
+      items: valuationItems,
+    };
+
     return {
       totalActiveProducts,
       lowStockCount: lowStockList.length - outOfStockCount,
       outOfStockCount,
       movementCounts,
       lowStockList,
+      inventoryValuation,
     };
   },
 

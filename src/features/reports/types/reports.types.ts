@@ -1,5 +1,25 @@
 export type DateRangeKey = 'TODAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'THIS_MONTH' | 'LAST_MONTH';
 
+export interface ProductProfitabilityItem {
+  id: string;
+  name: string;
+  code: string | null;
+  qtySold: number;
+  actualCost: number;       // Sum of (quantity * sale_items.unit_cost_price)
+  sellingRevenue: number;   // Actual selling revenue after proportional discount adjustment
+  grossProfit: number;      // sellingRevenue - actualCost
+  profitMarginPct: number;  // (grossProfit / sellingRevenue) * 100
+}
+
+export interface ProductProfitabilitySummary {
+  totalQtySold: number;
+  totalActualCost: number;
+  totalSellingRevenue: number;
+  totalGrossProfit: number;
+  overallMarginPct: number;
+  products: ProductProfitabilityItem[];
+}
+
 export interface SalesAnalytics {
   totalRevenue: number;
   salesCount: number;
@@ -7,6 +27,7 @@ export interface SalesAnalytics {
   salesTrend: { date: string; revenue: number; count: number }[];
   paymentMethodBreakdown: { method: 'CASH' | 'UPI' | 'CARD'; amount: number; count: number }[];
   topProducts: { id: string; name: string; code: string | null; qtySold: number; revenue: number }[];
+  productProfitability: ProductProfitabilitySummary;
 }
 
 export interface PurchasingAnalytics {
@@ -17,12 +38,33 @@ export interface PurchasingAnalytics {
   topSuppliers: { id: string; name: string; purchaseCount: number; totalValue: number }[];
 }
 
+export interface InventoryValuationItem {
+  id: string;
+  name: string;
+  code: string | null;
+  stockQuantity: number;
+  currentCostPrice: number;
+  currentSellingPrice: number;
+  inventoryCostValue: number;    // stockQuantity * currentCostPrice
+  potentialSalesValue: number;   // stockQuantity * currentSellingPrice
+  potentialGrossMargin: number;  // potentialSalesValue - inventoryCostValue
+}
+
+export interface InventoryValuationSummary {
+  totalInventoryUnits: number;
+  totalInventoryCostValue: number;
+  totalPotentialSalesValue: number;
+  totalPotentialGrossMargin: number;
+  items: InventoryValuationItem[];
+}
+
 export interface InventoryAnalytics {
   totalActiveProducts: number;
   lowStockCount: number;
   outOfStockCount: number;
   movementCounts: { type: string; count: number; totalQty: number }[];
   lowStockList: { id: string; name: string; code: string | null; stock: number; threshold: number; unit: string }[];
+  inventoryValuation: InventoryValuationSummary;
 }
 
 export interface RepairAnalytics {

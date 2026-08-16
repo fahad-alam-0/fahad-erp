@@ -214,7 +214,7 @@ export const ReportsPage: React.FC = () => {
           )}
 
           {activeTab === 'sales' && !isTechnician && (
-            <SalesAnalyticsWidget data={salesData} isLoading={isLoading} />
+            <SalesAnalyticsWidget data={salesData} isLoading={isLoading} userRole={userRole} />
           )}
 
           {activeTab === 'purchasing' && !isTechnician && (
@@ -222,7 +222,7 @@ export const ReportsPage: React.FC = () => {
           )}
 
           {activeTab === 'inventory' && !isTechnician && (
-            <InventoryAnalyticsWidget data={inventoryData} isLoading={isLoading} />
+            <InventoryAnalyticsWidget data={inventoryData} isLoading={isLoading} userRole={userRole} />
           )}
 
           {activeTab === 'service-performance' && (
