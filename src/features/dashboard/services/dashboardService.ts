@@ -150,23 +150,27 @@ export const dashboardService = {
     // 8. Technician Earnings Summary (Explicit constraint hint to resolve ambiguous profiles FKs: technician_id vs finalized_by)
     const snapshotsRes = await (supabase
       .from('repair_profit_snapshots') as any)
-      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)');
+      .select('technician_id, technician_share, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role)');
 
     if (snapshotsRes.error) {
       console.error('Error fetching technician profit snapshots:', snapshotsRes.error);
       throw new Error(`Failed to fetch technician profit snapshots: ${snapshotsRes.error.message}`);
     }
 
-    const techMap = new Map<string, { name: string; jobs: number; total: number }>();
+    const techMap = new Map<string, { name: string; role: string; jobs: number; total: number }>();
     (snapshotsRes.data || []).forEach((snap: any) => {
       const techId = snap.technician_id;
       const techName = snap.technician?.full_name || 'Technician';
+      const techRole = snap.technician?.role || 'TECHNICIAN';
       const share = Number(snap.technician_share || 0);
 
-      const existing = techMap.get(techId) || { name: techName, jobs: 0, total: 0 };
-      existing.jobs += 1;
-      existing.total += share;
-      techMap.set(techId, existing);
+      // Filter: Only include TECHNICIAN role profiles or non-zero payout shares in the Technician Payout Roster
+      if (techRole === 'TECHNICIAN' || share > 0) {
+        const existing = techMap.get(techId) || { name: techName, role: techRole, jobs: 0, total: 0 };
+        existing.jobs += 1;
+        existing.total += share;
+        techMap.set(techId, existing);
+      }
     });
 
     const technicianEarnings: TechnicianEarningSummary[] = Array.from(techMap.entries()).map(([id, val]) => ({
