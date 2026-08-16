@@ -99,7 +99,7 @@ describe('Technician Roster & Global Search Unit Tests', () => {
 
   it('3. TECHNICIAN role creating repair invokes private.create_repair_job RPC', async () => {
     mockRpc.mockResolvedValue({
-      data: { repair_id: 'rep_99', job_number: 'REP-20260816-000099', status: 'RECEIVED', service_revenue: 1500, assigned_technician_id: 'tech_01' },
+      data: { repair_id: 'rep_99', job_number: 'REP-20260816-000099', status: 'RECEIVED', service_revenue: 1500, assigned_technician_id: null },
       error: null,
     });
 
@@ -119,5 +119,19 @@ describe('Technician Roster & Global Search Unit Tests', () => {
       p_quoted_amount: 1500,
     }));
     expect(result.job_number).toBe('REP-20260816-000099');
+  });
+
+  it('4. repairService.claimRepair invokes private.claim_repair RPC correctly', async () => {
+    mockRpc.mockResolvedValue({
+      data: { repair_id: 'rep_99', job_number: 'REP-20260816-000099', claimed_by: 'tech_01', status: 'RECEIVED' },
+      error: null,
+    });
+
+    await repairService.claimRepair('rep_99');
+
+    expect(supabase.schema).toHaveBeenCalledWith('private');
+    expect(mockRpc).toHaveBeenCalledWith('claim_repair', {
+      p_repair_id: 'rep_99',
+    });
   });
 });

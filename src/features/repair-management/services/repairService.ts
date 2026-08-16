@@ -17,11 +17,20 @@ export const repairService = {
       .select('*, customer:customers(full_name, phone), technician:profiles!repair_jobs_technician_id_fkey(full_name, phone, role)')
       .order('received_at', { ascending: false });
 
-    // Technician role guard: Technicians only get assigned jobs if logged in as TECH
+    // Technician role guard: Technicians see UNASSIGNED jobs in shared queue PLUS their own assigned jobs
     if (params?.userRole === 'TECHNICIAN' && params?.userId) {
-      req = req.eq('technician_id', params.userId);
+      if (params.technicianId === 'UNASSIGNED') {
+        req = req.is('technician_id', null);
+      } else if (params.technicianId === 'MY_REPAIRS') {
+        req = req.eq('technician_id', params.userId);
+      }
+      // If technicianId is 'ALL' or undefined, RLS enforces: technician_id IS NULL OR technician_id = auth.uid()
     } else if (params?.technicianId && params.technicianId !== 'ALL') {
-      req = req.eq('technician_id', params.technicianId);
+      if (params.technicianId === 'UNASSIGNED') {
+        req = req.is('technician_id', null);
+      } else {
+        req = req.eq('technician_id', params.technicianId);
+      }
     }
 
     if (params?.status && params.status !== 'ALL') {
@@ -224,6 +233,17 @@ export const repairService = {
     }
 
     return data;
+  },
+
+  async claimRepair(repairId: string): Promise<void> {
+    const { error } = await supabase.schema('private').rpc('claim_repair', {
+      p_repair_id: repairId,
+    });
+
+    if (error) {
+      console.error('Error executing claim_repair RPC:', error);
+      throw new Error(error.message || 'Failed to claim repair job.');
+    }
   },
 
   async assignTechnician(repairId: string, technicianId: string): Promise<void> {

@@ -23,6 +23,7 @@ import {
   Lock,
   CheckCircle2,
   AlertCircle,
+  Hand,
 } from 'lucide-react';
 
 interface RepairDetailModalProps {
@@ -46,6 +47,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   // Action Modals State
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -82,9 +84,26 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const displayJob = fullJob || repair;
   const isFinalized = displayJob.financial_status === 'FINALIZED';
   const isTerminal = displayJob.status === 'DELIVERED' || displayJob.status === 'CANCELLED';
+  const isUnassigned = displayJob.technician_id === null;
+  const isAssignedToMe = displayJob.technician_id === userId;
 
   const partsTotalCost = (displayJob.repair_parts || []).reduce((sum, p) => sum + p.total_cost, 0);
   const paymentsTotalAmount = (displayJob.repair_payments || []).reduce((sum, p) => sum + p.amount, 0);
+
+  const handleClaimClick = async () => {
+    if (isStaff) return;
+    setErrorMsg(null);
+    try {
+      setIsClaiming(true);
+      await repairService.claimRepair(displayJob.id);
+      await loadJobData(displayJob.id);
+      onRefresh();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to claim repair job.');
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   const handleFinalizeFinancialsClick = async () => {
     if (!isOwner) return;
@@ -92,7 +111,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
     try {
       setIsFinalizing(true);
       await repairService.finalizeFinancials(displayJob.id);
-      loadJobData(displayJob.id);
+      await loadJobData(displayJob.id);
       onRefresh();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to finalize financials.');
@@ -136,7 +155,20 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
         {/* Workspace Toolbar */}
         <div className="p-3 bg-muted/20 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center space-x-2">
-            {!isTerminal && !isFinalized && (
+            {/* Take Repair Claim Button */}
+            {isUnassigned && !isTerminal && !isStaff && (
+              <Button
+                size="sm"
+                onClick={handleClaimClick}
+                disabled={isClaiming}
+                className="h-8 text-xs font-bold pressable flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {isClaiming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Hand className="w-3.5 h-3.5" />}
+                <span>Take Repair</span>
+              </Button>
+            )}
+
+            {!isTerminal && !isFinalized && (isOwner || isAssignedToMe) && (
               <Button
                 size="sm"
                 variant="outline"
@@ -160,7 +192,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
-            {!isTerminal && !isFinalized && (
+            {!isTerminal && !isFinalized && (isOwner || isAssignedToMe) && (
               <>
                 <Button
                   size="sm"
@@ -223,7 +255,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/40 rounded-xl border border-border text-xs">
                 <div className="space-y-1.5">
                   <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">
-                    Customer & Technician Info
+                    Customer & Assignment Info
                   </span>
                   <p className="font-bold text-foreground flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -234,12 +266,22 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                       Ph: {displayJob.customer.phone}
                     </p>
                   )}
-                  <p className="text-muted-foreground text-[11px] pt-1">
-                    Assigned Tech:{' '}
-                    <strong className="text-foreground">
-                      {displayJob.technician?.full_name || 'Unassigned'}
-                    </strong>
-                  </p>
+                  <div className="pt-1 flex items-center gap-1.5">
+                    <span className="text-muted-foreground text-[11px]">Worker:</span>
+                    {isUnassigned ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                        UNASSIGNED (SHARED QUEUE)
+                      </span>
+                    ) : isAssignedToMe ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        ASSIGNED TO YOU
+                      </span>
+                    ) : (
+                      <strong className="text-foreground text-[11px]">
+                        {displayJob.technician?.full_name || 'Assigned Specialist'}
+                      </strong>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 text-left sm:text-right">
@@ -447,13 +489,12 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </div>
 
               {/* ROLE-GATED PROFIT SNAPSHOT BOX */}
-              {/* STRICT RULE: STAFF DOES NOT SEE PROFIT SNAPSHOTS! */}
               {!isStaff && displayJob.repair_profit_snapshots && (
                 <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-xs font-mono">
                   <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
                     <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans flex items-center gap-1.5">
                       <DollarSign className="w-4 h-4" />
-                      <span>Financially Finalized Profit Snapshot (Migration 006)</span>
+                      <span>Financially Finalized Profit Snapshot</span>
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       Finalized by Owner
