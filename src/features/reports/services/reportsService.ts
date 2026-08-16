@@ -6,6 +6,8 @@ import {
   InventoryAnalytics,
   RepairAnalytics,
   OwnerFinancialOverview,
+  WorkerServicePerformance,
+  RepairServicePerformanceReport,
 } from '../types/reports.types';
 
 export const reportsService = {
@@ -410,6 +412,106 @@ export const reportsService = {
       ownerRepairShare,
       technicianRepairShare,
       technicianEarningsSummary,
+    };
+  },
+
+  async getRepairServicePerformanceReport(
+    startDate: string,
+    endDate: string,
+    userRole?: string,
+    userId?: string
+  ): Promise<RepairServicePerformanceReport | null> {
+    // STRICT PRIVACY RULE: STAFF MUST NOT ACCESS REPAIR PROFIT SNAPSHOTS!
+    if (userRole === 'STAFF') return null;
+
+    let query = (supabase.from('repair_profit_snapshots') as any)
+      .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role)')
+      .gte('calculated_at', startDate)
+      .lte('calculated_at', endDate);
+
+    // If TECHNICIAN, filter by technician_id = userId
+    if (userRole === 'TECHNICIAN' && userId) {
+      query = query.eq('technician_id', userId);
+    }
+
+    const { data: snaps, error } = await query;
+    if (error) {
+      console.error('Error fetching repair profit snapshots for service performance report:', error);
+      throw new Error(error.message || 'Failed to fetch repair service performance data.');
+    }
+
+    const snapsList = snaps || [];
+    const workerMap = new Map<string, WorkerServicePerformance>();
+
+    let totalServiceRevenue = 0;
+    let totalPartsCost = 0;
+    let totalNetProfit = 0;
+    let totalOwnerShare = 0;
+    let totalTechnicianPayout = 0;
+    let ownerRepairsCount = 0;
+    let technicianRepairsCount = 0;
+
+    snapsList.forEach((sn: any) => {
+      const rev = Number(sn.service_revenue || 0);
+      const parts = Number(sn.parts_cost || 0);
+      const net = Number(sn.net_repair_profit || 0);
+      const oShare = Number(sn.owner_share || 0);
+      const tShare = Number(sn.technician_share || 0);
+
+      totalServiceRevenue += rev;
+      totalPartsCost += parts;
+      totalNetProfit += net;
+      totalOwnerShare += oShare;
+      totalTechnicianPayout += tShare;
+
+      const wId = sn.technician_id;
+      const wName = sn.technician?.full_name || 'Worker';
+      const wRole: 'OWNER' | 'TECHNICIAN' | 'STAFF' = sn.technician?.role || (Number(sn.technician_percentage) === 0 ? 'OWNER' : 'TECHNICIAN');
+
+      if (wRole === 'OWNER') {
+        ownerRepairsCount++;
+      } else {
+        technicianRepairsCount++;
+      }
+
+      const existing = workerMap.get(wId) || {
+        workerId: wId,
+        workerName: wName,
+        workerRole: wRole,
+        servicesCompleted: 0,
+        serviceRevenue: 0,
+        partsCost: 0,
+        netProfit: 0,
+        ownerShare: 0,
+        technicianShare: 0,
+      };
+
+      existing.servicesCompleted += 1;
+      existing.serviceRevenue += rev;
+      existing.partsCost += parts;
+      existing.netProfit += net;
+      existing.ownerShare += oShare;
+      existing.technicianShare += tShare;
+
+      workerMap.set(wId, existing);
+    });
+
+    const allWorkersComparison = Array.from(workerMap.values());
+    const ownerPerformance = allWorkersComparison.find((w) => w.workerRole === 'OWNER') || null;
+    const technicianPerformances = allWorkersComparison.filter((w) => w.workerRole !== 'OWNER');
+
+    return {
+      totalRepairsCompleted: snapsList.length,
+      ownerRepairsCount,
+      technicianRepairsCount,
+      totalServiceRevenue,
+      totalPartsCost,
+      totalNetProfit,
+      totalOwnerShare,
+      totalTechnicianPayout,
+      ownerPerformance,
+      technicianPerformances,
+      allWorkersComparison,
     };
   },
 };

@@ -43,3 +43,29 @@ export interface OwnerFinancialOverview {
   technicianRepairShare: number;
   technicianEarningsSummary: { techId: string; techName: string; completedJobs: number; techShare: number }[];
 }
+
+export interface WorkerServicePerformance {
+  workerId: string;
+  workerName: string;
+  workerRole: 'OWNER' | 'TECHNICIAN' | 'STAFF';
+  servicesCompleted: number;
+  serviceRevenue: number;
+  partsCost: number;
+  netProfit: number;
+  ownerShare: number;
+  technicianShare: number;
+}
+
+export interface RepairServicePerformanceReport {
+  totalRepairsCompleted: number;
+  ownerRepairsCount: number;
+  technicianRepairsCount: number;
+  totalServiceRevenue: number;
+  totalPartsCost: number;
+  totalNetProfit: number;
+  totalOwnerShare: number;
+  totalTechnicianPayout: number;
+  ownerPerformance: WorkerServicePerformance | null;
+  technicianPerformances: WorkerServicePerformance[];
+  allWorkersComparison: WorkerServicePerformance[];
+}

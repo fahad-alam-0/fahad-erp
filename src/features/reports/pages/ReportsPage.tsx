@@ -8,6 +8,7 @@ import {
   InventoryAnalytics,
   RepairAnalytics,
   OwnerFinancialOverview,
+  RepairServicePerformanceReport,
 } from '../types/reports.types';
 import { DateRangeSelector } from '../components/DateRangeSelector';
 import { SalesAnalyticsWidget } from '../components/SalesAnalyticsWidget';
@@ -15,6 +16,7 @@ import { PurchasingAnalyticsWidget } from '../components/PurchasingAnalyticsWidg
 import { InventoryAnalyticsWidget } from '../components/InventoryAnalyticsWidget';
 import { RepairAnalyticsWidget } from '../components/RepairAnalyticsWidget';
 import { OwnerFinancialOverviewWidget } from '../components/OwnerFinancialOverviewWidget';
+import { RepairServicePerformanceWidget } from '../components/RepairServicePerformanceWidget';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +27,7 @@ import {
   ShieldCheck,
   RefreshCw,
   AlertCircle,
+  Award,
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
@@ -43,6 +46,7 @@ export const ReportsPage: React.FC = () => {
   const [inventoryData, setInventoryData] = useState<InventoryAnalytics | null>(null);
   const [repairData, setRepairData] = useState<RepairAnalytics | null>(null);
   const [ownerFinancialData, setOwnerFinancialData] = useState<OwnerFinancialOverview | null>(null);
+  const [repairPerformanceData, setRepairPerformanceData] = useState<RepairServicePerformanceReport | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +57,13 @@ export const ReportsPage: React.FC = () => {
       setError(null);
       const bounds = reportsService.getDateRangeBounds(dateRange);
 
-      const [sales, purchasing, inventory, repair, ownerFin] = await Promise.all([
+      const [sales, purchasing, inventory, repair, ownerFin, repairPerf] = await Promise.all([
         reportsService.getSalesAnalytics(bounds.startDate, bounds.endDate),
         reportsService.getPurchasingAnalytics(bounds.startDate, bounds.endDate),
         reportsService.getInventoryAnalytics(),
         reportsService.getRepairAnalytics(bounds.startDate, bounds.endDate, userRole, userId),
         reportsService.getOwnerFinancialOverview(bounds.startDate, bounds.endDate, userRole),
+        reportsService.getRepairServicePerformanceReport(bounds.startDate, bounds.endDate, userRole, userId),
       ]);
 
       setSalesData(sales);
@@ -66,6 +71,7 @@ export const ReportsPage: React.FC = () => {
       setInventoryData(inventory);
       setRepairData(repair);
       setOwnerFinancialData(ownerFin);
+      setRepairPerformanceData(repairPerf);
     } catch (err: any) {
       console.error('Failed to load reports analytics data:', err);
       setError(err.message || 'Failed to load reports analytics.');
@@ -165,6 +171,18 @@ export const ReportsPage: React.FC = () => {
         )}
 
         <button
+          onClick={() => setActiveTab('service-performance')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
+            activeTab === 'service-performance'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Award className="w-4 h-4 text-emerald-500" />
+          <span>Repair Service Performance</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('repairs')}
           className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
             activeTab === 'repairs'
@@ -173,7 +191,7 @@ export const ReportsPage: React.FC = () => {
           }`}
         >
           <Wrench className="w-4 h-4 text-primary" />
-          <span>Repair Performance</span>
+          <span>Repair Status Pipeline</span>
         </button>
       </div>
 
@@ -189,7 +207,10 @@ export const ReportsPage: React.FC = () => {
       ) : (
         <>
           {activeTab === 'executive' && isOwner && (
-            <OwnerFinancialOverviewWidget data={ownerFinancialData} isLoading={isLoading} />
+            <div className="space-y-6">
+              <OwnerFinancialOverviewWidget data={ownerFinancialData} isLoading={isLoading} />
+              <RepairServicePerformanceWidget data={repairPerformanceData} isLoading={isLoading} userRole={userRole} />
+            </div>
           )}
 
           {activeTab === 'sales' && !isTechnician && (
@@ -202,6 +223,10 @@ export const ReportsPage: React.FC = () => {
 
           {activeTab === 'inventory' && !isTechnician && (
             <InventoryAnalyticsWidget data={inventoryData} isLoading={isLoading} />
+          )}
+
+          {activeTab === 'service-performance' && (
+            <RepairServicePerformanceWidget data={repairPerformanceData} isLoading={isLoading} userRole={userRole} />
           )}
 
           {activeTab === 'repairs' && (

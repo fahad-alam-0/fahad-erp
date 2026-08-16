@@ -29,10 +29,9 @@ export const RecentRepairsTable: React.FC<RecentRepairsTableProps> = ({
         <table className="w-full text-left text-xs">
           <thead className="bg-muted/40 text-muted-foreground text-[10px] uppercase font-semibold border-b border-border">
             <tr>
-              <th className="p-3">Job #</th>
               <th className="p-3">Customer</th>
               <th className="p-3">Device & Issue</th>
-              {showTechnicianColumn && <th className="p-3">Technician</th>}
+              {showTechnicianColumn && <th className="p-3">Assigned Specialist</th>}
               <th className="p-3">Status</th>
               <th className="p-3 text-right">Quoted Total</th>
             </tr>
@@ -41,7 +40,7 @@ export const RecentRepairsTable: React.FC<RecentRepairsTableProps> = ({
             {repairs.length === 0 ? (
               <tr>
                 <td
-                  colSpan={showTechnicianColumn ? 6 : 5}
+                  colSpan={showTechnicianColumn ? 5 : 4}
                   className="p-8 text-center text-muted-foreground italic"
                 >
                   No active repair jobs listed.
@@ -50,7 +49,6 @@ export const RecentRepairsTable: React.FC<RecentRepairsTableProps> = ({
             ) : (
               repairs.map((rep) => (
                 <tr key={rep.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="p-3 font-mono font-semibold text-foreground">{rep.job_number}</td>
                   <td className="p-3 font-medium text-foreground">{rep.customer_name}</td>
                   <td className="p-3">
                     <p className="font-semibold text-foreground">

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RecentSaleItem } from '../types/dashboard.types';
-import { ShoppingCart, FileText, Package } from 'lucide-react';
+import { ShoppingCart, Package } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { SaleDetailModal } from '@/features/sales-management/components/SaleDetailModal';
@@ -15,7 +15,6 @@ export const RecentSalesTable: React.FC<RecentSalesTableProps> = ({ sales }) => 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleOpenSaleModal = (sale: RecentSaleItem) => {
-    // Construct Sale object to pass to SaleDetailModal
     const modalSaleObj: Sale = {
       id: sale.id,
       sale_number: sale.sale_number,
@@ -81,7 +80,6 @@ export const RecentSalesTable: React.FC<RecentSalesTableProps> = ({ sales }) => 
           <table className="w-full text-left text-xs">
             <thead className="bg-muted/40 text-muted-foreground text-[10px] uppercase font-semibold border-b border-border">
               <tr>
-                <th className="p-3">Sale #</th>
                 <th className="p-3">Product(s)</th>
                 <th className="p-3">Customer</th>
                 <th className="p-3 text-center">Qty</th>
@@ -93,28 +91,21 @@ export const RecentSalesTable: React.FC<RecentSalesTableProps> = ({ sales }) => 
             <tbody className="divide-y divide-border">
               {sales.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground italic">
+                  <td colSpan={6} className="p-8 text-center text-muted-foreground italic">
                     No sales recorded today yet.
                   </td>
                 </tr>
               ) : (
                 sales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-muted/30 transition-colors">
-                    {/* Sale # Clickable Button */}
-                    <td className="p-3">
-                      <button
-                        onClick={() => handleOpenSaleModal(sale)}
-                        className="font-mono font-bold text-primary hover:underline hover:text-primary/80 transition-colors flex items-center gap-1 group text-left"
-                        title="Click to view full sale receipt details"
-                      >
-                        <FileText className="w-3.5 h-3.5 opacity-70 group-hover:opacity-100 shrink-0" />
-                        <span>{sale.sale_number}</span>
-                      </button>
-                    </td>
-
+                  <tr
+                    key={sale.id}
+                    onClick={() => handleOpenSaleModal(sale)}
+                    className="hover:bg-muted/30 transition-colors cursor-pointer group"
+                    title="Click to view full sale receipt details"
+                  >
                     {/* Product(s) */}
-                    <td className="p-3 max-w-[220px]">
-                      <div className="font-semibold text-foreground truncate flex items-center gap-1.5" title={sale.products_summary}>
+                    <td className="p-3 max-w-[240px]">
+                      <div className="font-semibold text-foreground truncate flex items-center gap-1.5 group-hover:text-primary transition-colors" title={sale.products_summary}>
                         <Package className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                         <span className="truncate">{sale.products_summary}</span>
                       </div>
