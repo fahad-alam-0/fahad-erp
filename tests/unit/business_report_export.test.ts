@@ -14,7 +14,7 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
     vi.clearAllMocks();
   });
 
-  it('1. Calculates DateRangeBounds for Today, Yesterday, and Custom same-day ranges without zero-length drops', () => {
+  it('1. Calculates DateRangeBounds for Today, Yesterday, Last 7 Days, and Custom same-day ranges in Asia/Kolkata timezone', () => {
     // 1. Today date range
     const today = reportsService.getDateRangeBounds('TODAY');
     expect(today.periodLabel).toContain('Today');
@@ -25,11 +25,17 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
     const yesterday = reportsService.getDateRangeBounds('YESTERDAY');
     expect(yesterday.periodLabel).toContain('Yesterday');
 
-    // 3. Custom same-day range (From 17 Aug To 17 Aug)
+    // 3. Last 7 Days range
+    const l7 = reportsService.getDateRangeBounds('LAST_7_DAYS');
+    expect(l7.periodLabel).toContain('Last 7 Days');
+    expect(new Date(l7.endExclusive).getTime()).toBeGreaterThan(new Date(l7.startInclusive).getTime());
+
+    // 4. Custom same-day range (From 17 Aug To 17 Aug)
     const customSameDay = reportsService.getDateRangeBounds('CUSTOM', '2026-08-17', '2026-08-17');
     expect(customSameDay.displayStart).toContain('17 August 2026');
     expect(customSameDay.displayEnd).toContain('17 August 2026');
     expect(customSameDay.periodLabel).toContain('17 August 2026 — 17 August 2026');
+    expect(new Date(customSameDay.endExclusive).getTime()).toBeGreaterThan(new Date(customSameDay.startInclusive).getTime());
   });
 
   it('2. Fully reconciles Sales, Repair Profit, Worker Shares, Payments, and Inventory Valuation', async () => {
@@ -149,29 +155,29 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
     const bounds = reportsService.getDateRangeBounds('TODAY');
     const report = await businessReportExportService.fetchReportData(bounds);
 
-    // 4. Sales aggregation
+    // Sales aggregation
     expect(report.salesSummary.salesCount).toBe(1);
     expect(report.salesSummary.totalRevenue).toBe(1500);
 
-    // 5. Historical product cost & 6. Product profit
+    // Historical product cost & Product profit
     expect(report.salesSummary.totalCost).toBe(1000); // 2 * 500
     expect(report.salesSummary.totalProfit).toBe(500); // 1500 - 1000
 
-    // 7. Repair revenue & 8. Parts cost & 9. Repair profit
+    // Repair revenue, Parts cost & Repair profit
     expect(report.repairSummary.totalServiceRevenue).toBe(5100);
     expect(report.repairSummary.totalPartsCost).toBe(0);
     expect(report.repairSummary.netRepairProfit).toBe(5100);
 
-    // 10. Owner share & 11. Technician share
+    // Owner share & Technician share
     expect(report.repairSummary.totalOwnerShare).toBe(1530);
     expect(report.repairSummary.totalTechnicianPayout).toBe(3570);
 
-    // 12. Worker performance
+    // Worker performance
     expect(report.workerPerformance).toHaveLength(1);
     expect(report.workerPerformance[0].workerName).toBe('Munnu Technician');
     expect(report.workerPerformance[0].technicianShare).toBe(3570);
 
-    // 13. Cash/UPI/Card totals
+    // Cash/UPI/Card totals
     expect(report.paymentSummary.posUpi).toBe(1500);
     expect(report.paymentSummary.repairCash).toBe(4100);
     expect(report.paymentSummary.repairUpi).toBe(1000);
@@ -179,7 +185,7 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
     expect(report.paymentSummary.totalUpi).toBe(2500);
     expect(report.paymentSummary.totalCollected).toBe(6600);
 
-    // 14. Inventory valuation
+    // Inventory valuation
     expect(report.inventorySummary.totalStockUnits).toBe(60);
     expect(report.inventorySummary.currentInventoryValue).toBe(5359.8);
     expect(report.inventorySummary.potentialSalesValue).toBe(7399.8);

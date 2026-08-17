@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { DateRangeKey } from '../types/reports.types';
 import { reportsService } from '../services/reportsService';
 import { businessReportExportService, DetailedReportData } from '../services/businessReportExportService';
+import { ReportDataDiagnosticPanel } from './ReportDataDiagnosticPanel';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
@@ -18,10 +19,11 @@ import {
 
 interface BusinessReportGeneratorWidgetProps {
   userRole?: string;
+  selectedRange?: DateRangeKey;
 }
 
-export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidgetProps> = ({ userRole = 'OWNER' }) => {
-  const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>('THIS_MONTH');
+export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidgetProps> = ({ userRole = 'OWNER', selectedRange }) => {
+  const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>(selectedRange || 'THIS_MONTH');
   const [customStartDate, setCustomStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   );
@@ -178,6 +180,13 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
           )}
         </div>
 
+        {/* Temporary Developer Diagnostic Trace Panel */}
+        <ReportDataDiagnosticPanel
+          dateRangeKey={dateRangeKey}
+          customStart={customStartDate}
+          customEnd={customEndDate}
+        />
+
         {/* 2. Format Selection */}
         <div className="space-y-2 pt-2 border-t border-border">
           <label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
@@ -282,7 +291,7 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
             <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Sales Revenue</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Sales Revenue (INR)</p>
                   <p className="text-base font-bold text-emerald-600 font-mono">
                     {formatCurrency(previewData.salesSummary.totalRevenue, 'INR')}
                   </p>
@@ -290,7 +299,7 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                 </div>
 
                 <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Product Profit</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Product Profit (INR)</p>
                   <p className="text-base font-bold text-primary font-mono">
                     {formatCurrency(previewData.salesSummary.totalProfit, 'INR')}
                   </p>
@@ -298,7 +307,7 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                 </div>
 
                 <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Repair Revenue</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Repair Revenue (INR)</p>
                   <p className="text-base font-bold text-emerald-600 font-mono">
                     {formatCurrency(previewData.repairSummary.totalServiceRevenue, 'INR')}
                   </p>
@@ -306,7 +315,7 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                 </div>
 
                 <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Net Repair Profit</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Net Repair Profit (INR)</p>
                   <p className="text-base font-bold text-primary font-mono">
                     {formatCurrency(previewData.repairSummary.netRepairProfit, 'INR')}
                   </p>
@@ -336,7 +345,7 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
               )}
 
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
-                <p className="text-[10px] uppercase font-bold text-muted-foreground">TOTAL BUSINESS NET PROFIT</p>
+                <p className="text-[10px] uppercase font-bold text-muted-foreground">TOTAL BUSINESS NET PROFIT (INR)</p>
                 <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(previewData.salesSummary.totalProfit + previewData.repairSummary.netRepairProfit, 'INR')}
                 </p>

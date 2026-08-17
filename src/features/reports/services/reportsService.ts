@@ -25,188 +25,115 @@ export interface DateRangeBounds {
   label: string;
 }
 
-function formatDateHuman(d: Date): string {
-  return d.toLocaleDateString('en-IN', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
+export const getAsiaKolkataDateBounds = (key: DateRangeKey, customStart?: string, customEnd?: string): DateRangeBounds => {
+  const now = new Date();
+  
+  // Format current date in Asia/Kolkata YYYY-MM-DD
+  const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
+  const kolkataDateStr = formatter.format(now); // e.g. "2026-08-17"
+  const [year, month, day] = kolkataDateStr.split('-').map(Number);
+
+  // Helper to convert IST midnight (00:00:00) to ISO string in UTC (IST is UTC+5:30, so 00:00 IST = prev day 18:30 UTC)
+  const getISTMidnightISO = (y: number, m: number, d: number) => {
+    const utcDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+    const istMidnightMs = utcDate.getTime() - (5 * 60 + 30) * 60 * 1000;
+    return new Date(istMidnightMs).toISOString();
+  };
+
+  const formatDateHumanIST = (y: number, m: number, d: number) => {
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.toLocaleDateString('en-IN', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  let startIso: string;
+  let endIso: string;
+  let label: string;
+  let displayStart: string;
+  let displayEnd: string;
+
+  if (key === 'TODAY') {
+    startIso = getISTMidnightISO(year, month, day);
+    endIso = getISTMidnightISO(year, month, day + 1);
+    displayStart = formatDateHumanIST(year, month, day);
+    displayEnd = displayStart;
+    label = `Today — ${displayStart}`;
+  } else if (key === 'YESTERDAY') {
+    startIso = getISTMidnightISO(year, month, day - 1);
+    endIso = getISTMidnightISO(year, month, day);
+    displayStart = formatDateHumanIST(year, month, day - 1);
+    displayEnd = displayStart;
+    label = `Yesterday — ${displayStart}`;
+  } else if (key === 'LAST_7_DAYS') {
+    startIso = getISTMidnightISO(year, month, day - 7);
+    endIso = getISTMidnightISO(year, month, day + 1);
+    displayStart = formatDateHumanIST(year, month, day - 7);
+    displayEnd = formatDateHumanIST(year, month, day);
+    label = `Last 7 Days (${displayStart} — ${displayEnd})`;
+  } else if (key === 'LAST_10_DAYS') {
+    startIso = getISTMidnightISO(year, month, day - 10);
+    endIso = getISTMidnightISO(year, month, day + 1);
+    displayStart = formatDateHumanIST(year, month, day - 10);
+    displayEnd = formatDateHumanIST(year, month, day);
+    label = `Last 10 Days (${displayStart} — ${displayEnd})`;
+  } else if (key === 'LAST_30_DAYS') {
+    startIso = getISTMidnightISO(year, month, day - 30);
+    endIso = getISTMidnightISO(year, month, day + 1);
+    displayStart = formatDateHumanIST(year, month, day - 30);
+    displayEnd = formatDateHumanIST(year, month, day);
+    label = `Last 30 Days (${displayStart} — ${displayEnd})`;
+  } else if (key === 'THIS_MONTH') {
+    startIso = getISTMidnightISO(year, month, 1);
+    endIso = getISTMidnightISO(year, month + 1, 1);
+    displayStart = formatDateHumanIST(year, month, 1);
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    displayEnd = formatDateHumanIST(year, month, lastDayOfMonth);
+    label = `This Month (${displayStart} — ${displayEnd})`;
+  } else if (key === 'LAST_MONTH') {
+    startIso = getISTMidnightISO(year, month - 1, 1);
+    endIso = getISTMidnightISO(year, month, 1);
+    displayStart = formatDateHumanIST(year, month - 1, 1);
+    const lastDayOfLastMonth = new Date(year, month - 1, 0).getDate();
+    displayEnd = formatDateHumanIST(year, month - 1, lastDayOfLastMonth);
+    label = `Last Month (${displayStart} — ${displayEnd})`;
+  } else if (key === 'CUSTOM' && customStart && customEnd) {
+    const [sY, sM, sD] = customStart.split('-').map(Number);
+    const [eY, eM, eD] = customEnd.split('-').map(Number);
+
+    startIso = getISTMidnightISO(sY, sM, sD);
+    endIso = getISTMidnightISO(eY, eM, eD + 1);
+
+    if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+      throw new Error('From date cannot be after To date.');
+    }
+
+    displayStart = formatDateHumanIST(sY, sM, sD);
+    displayEnd = formatDateHumanIST(eY, eM, eD);
+    label = `${displayStart} — ${displayEnd}`;
+  } else {
+    // Default THIS_MONTH
+    startIso = getISTMidnightISO(year, month, 1);
+    endIso = getISTMidnightISO(year, month + 1, 1);
+    displayStart = formatDateHumanIST(year, month, 1);
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    displayEnd = formatDateHumanIST(year, month, lastDayOfMonth);
+    label = `This Month (${displayStart} — ${displayEnd})`;
+  }
+
+  return {
+    startInclusive: startIso,
+    endExclusive: endIso,
+    startDate: startIso,
+    endDate: endIso,
+    displayStart,
+    displayEnd,
+    periodLabel: label,
+    label,
+  };
+};
 
 export const reportsService = {
   getDateRangeBounds(key: DateRangeKey, customStart?: string, customEnd?: string): DateRangeBounds {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const day = now.getDate();
-
-    if (key === 'TODAY') {
-      const start = new Date(year, month, day, 0, 0, 0, 0);
-      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
-      const dStr = formatDateHuman(start);
-      const label = `Today — ${dStr}`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStr,
-        displayEnd: dStr,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'YESTERDAY') {
-      const start = new Date(year, month, day - 1, 0, 0, 0, 0);
-      const end = new Date(year, month, day, 0, 0, 0, 0);
-      const dStr = formatDateHuman(start);
-      const label = `Yesterday — ${dStr}`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStr,
-        displayEnd: dStr,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'LAST_7_DAYS') {
-      const start = new Date(year, month, day - 7, 0, 0, 0, 0);
-      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
-      const dStart = formatDateHuman(start);
-      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
-      const label = `Last 7 Days (${dStart} — ${dEnd})`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'LAST_10_DAYS') {
-      const start = new Date(year, month, day - 10, 0, 0, 0, 0);
-      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
-      const dStart = formatDateHuman(start);
-      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
-      const label = `Last 10 Days (${dStart} — ${dEnd})`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'LAST_30_DAYS') {
-      const start = new Date(year, month, day - 30, 0, 0, 0, 0);
-      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
-      const dStart = formatDateHuman(start);
-      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
-      const label = `Last 30 Days (${dStart} — ${dEnd})`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'THIS_MONTH') {
-      const start = new Date(year, month, 1, 0, 0, 0, 0);
-      const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
-      const dStart = formatDateHuman(start);
-      const lastDayOfMonth = new Date(year, month + 1, 0);
-      const dEnd = formatDateHuman(lastDayOfMonth);
-      const label = `This Month (${dStart} — ${dEnd})`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'LAST_MONTH') {
-      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
-      const end = new Date(year, month, 1, 0, 0, 0, 0);
-      const dStart = formatDateHuman(start);
-      const lastDayOfLastMonth = new Date(year, month, 0);
-      const dEnd = formatDateHuman(lastDayOfLastMonth);
-      const label = `Last Month (${dStart} — ${dEnd})`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    if (key === 'CUSTOM' && customStart && customEnd) {
-      const [sYear, sMonth, sDay] = customStart.split('-').map(Number);
-      const [eYear, eMonth, eDay] = customEnd.split('-').map(Number);
-      const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-      const end = new Date(eYear, eMonth - 1, eDay + 1, 0, 0, 0, 0);
-
-      if (end.getTime() <= start.getTime()) {
-        throw new Error('From date cannot be after To date.');
-      }
-
-      const dStart = formatDateHuman(start);
-      const dEnd = formatDateHuman(new Date(eYear, eMonth - 1, eDay, 0, 0, 0, 0));
-      const label = `${dStart} — ${dEnd}`;
-      return {
-        startInclusive: start.toISOString(),
-        endExclusive: end.toISOString(),
-        startDate: start.toISOString(),
-        endDate: end.toISOString(),
-        displayStart: dStart,
-        displayEnd: dEnd,
-        periodLabel: label,
-        label,
-      };
-    }
-
-    // Default: THIS_MONTH
-    const start = new Date(year, month, 1, 0, 0, 0, 0);
-    const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
-    const dStart = formatDateHuman(start);
-    const dEnd = formatDateHuman(new Date(year, month + 1, 0));
-    const label = `This Month (${dStart} — ${dEnd})`;
-    return {
-      startInclusive: start.toISOString(),
-      endExclusive: end.toISOString(),
-      startDate: start.toISOString(),
-      endDate: end.toISOString(),
-      displayStart: dStart,
-      displayEnd: dEnd,
-      periodLabel: label,
-      label,
-    };
+    return getAsiaKolkataDateBounds(key, customStart, customEnd);
   },
 
   async getSalesAnalytics(startDate: string, endDate: string): Promise<SalesAnalytics> {
@@ -278,7 +205,7 @@ export const reportsService = {
       }));
     }
 
-    // Top products sold & product profitability (historical cost + revenue + margin)
+    // Top products sold & product profitability
     let topProducts: { id: string; name: string; code: string | null; qtySold: number; revenue: number }[] = [];
     const prodMap: Record<
       string,

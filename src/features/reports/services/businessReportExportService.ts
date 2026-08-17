@@ -169,7 +169,7 @@ export const businessReportExportService = {
     const salesList = sales || [];
     const saleIds = salesList.map((s) => s.id);
 
-    // Primary sales revenue sum directly from sales table for 100% reconciliation with Dashboard & Reports
+    // Primary sales revenue sum directly from sales table
     const totalSalesRevenueFromSalesTable = salesList.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
 
     // Fetch sale payments for period
@@ -502,7 +502,7 @@ export const businessReportExportService = {
       });
     });
 
-    // Debug Log Trace
+    // Diagnostic Log Trace
     console.log(`========== BUSINESS REPORT EXPORT DEBUG ==========
 REPORT RANGE: ${periodLabel}
 startInclusive: ${startInclusive}
@@ -588,76 +588,62 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
   exportToExcel(data: DetailedReportData): void {
     const wb = XLSX.utils.book_new();
 
+    // Helper for plain numeric formatting without currency symbols
+    const num = (v: number) => Math.round(v * 100) / 100;
+
     // Sheet 1: Executive Summary
     const summaryRows = [
       ['FAHAD ELECTRONICS — BUSINESS PERFORMANCE REPORT SUMMARY'],
       ['Reporting Period:', data.periodLabel],
       [],
-      ['1. SALES SUMMARY'],
-      ['Total Completed Sales:', data.salesSummary.salesCount],
-      ['Total Sales Revenue (INR):', data.salesSummary.totalRevenue],
-      ['Total Product Cost (INR):', data.salesSummary.totalCost],
-      ['Total Product Gross Profit (INR):', data.salesSummary.totalProfit],
+      ['1. BUSINESS SUMMARY'],
+      ['Sales Revenue (INR):', num(data.salesSummary.totalRevenue)],
+      ['Product Cost Basis (INR):', num(data.salesSummary.totalCost)],
+      ['Product Gross Profit (INR):', num(data.salesSummary.totalProfit)],
+      ['Repair Service Revenue (INR):', num(data.repairSummary.totalServiceRevenue)],
+      ['Repair Parts Cost (INR):', num(data.repairSummary.totalPartsCost)],
+      ['Net Repair Profit (INR):', num(data.repairSummary.netRepairProfit)],
+      ['Owner Repair Share (INR):', num(data.repairSummary.totalOwnerShare)],
+      ['Technician Payout (INR):', num(data.repairSummary.totalTechnicianPayout)],
+      ['TOTAL BUSINESS NET PROFIT (INR):', num(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
       [],
-      ['2. REPAIR SERVICE SUMMARY'],
-      ['New Repair Tickets Intake:', data.repairSummary.newTicketsCount],
-      ['Completed / Delivered Repairs:', data.repairSummary.completedCount],
-      ['Total Repair Service Revenue (INR):', data.repairSummary.totalServiceRevenue],
-      ['Total Repair Parts Cost (INR):', data.repairSummary.totalPartsCost],
-      ['Net Repair Profit (INR):', data.repairSummary.netRepairProfit],
-      ['Owner Repair Profit Share (INR):', data.repairSummary.totalOwnerShare],
-      ['Technician Payout Share (INR):', data.repairSummary.totalTechnicianPayout],
+      ['2. PAYMENT COLLECTION CHANNELS'],
+      ['Cash Settlement (INR):', num(data.paymentSummary.totalCash)],
+      ['UPI Digital Transfer (INR):', num(data.paymentSummary.totalUpi)],
+      ['Card / POS Machine (INR):', num(data.paymentSummary.totalCard)],
+      ['TOTAL COLLECTION (INR):', num(data.paymentSummary.totalCollected)],
       [],
-      ['3. PAYMENT COLLECTION CHANNELS'],
-      ['POS Cash Collected (INR):', data.paymentSummary.posCash],
-      ['POS UPI Collected (INR):', data.paymentSummary.posUpi],
-      ['POS Card Collected (INR):', data.paymentSummary.posCard],
-      ['Repair Cash Collected (INR):', data.paymentSummary.repairCash],
-      ['Repair UPI Collected (INR):', data.paymentSummary.repairUpi],
-      ['Repair Card Collected (INR):', data.paymentSummary.repairCard],
-      ['TOTAL CASH SETTLEMENT (INR):', data.paymentSummary.totalCash],
-      ['TOTAL UPI SETTLEMENT (INR):', data.paymentSummary.totalUpi],
-      ['TOTAL CARD SETTLEMENT (INR):', data.paymentSummary.totalCard],
-      ['TOTAL BUSINESS COLLECTION (INR):', data.paymentSummary.totalCollected],
-      [],
-      ['4. OVERALL BUSINESS NET PROFIT'],
-      ['Product Gross Profit (INR):', data.salesSummary.totalProfit],
-      ['Net Repair Profit (INR):', data.repairSummary.netRepairProfit],
-      ['TOTAL BUSINESS NET PROFIT (INR):', data.salesSummary.totalProfit + data.repairSummary.netRepairProfit],
-      ['OWNER RETAINED PROFIT SHARE (INR):', data.salesSummary.totalProfit + data.repairSummary.totalOwnerShare],
-      ['TECHNICIAN PAYOUT SHARE (INR):', data.repairSummary.totalTechnicianPayout],
-      [],
-      ['5. CURRENT INVENTORY VALUATION'],
-      ['Active Products:', data.inventorySummary.totalActiveProducts],
+      ['3. CURRENT INVENTORY VALUATION'],
+      ['Active Products in Catalog:', data.inventorySummary.totalActiveProducts],
       ['Total Stock Units:', data.inventorySummary.totalStockUnits],
-      ['Current Inventory Cost Value (INR):', data.inventorySummary.currentInventoryValue],
-      ['Potential Sales Value (INR):', data.inventorySummary.potentialSalesValue],
-      ['Potential Gross Margin (INR):', data.inventorySummary.potentialGrossMargin],
+      ['Current Inventory Cost Value (INR):', num(data.inventorySummary.currentInventoryValue)],
+      ['Potential Sales Value (INR):', num(data.inventorySummary.potentialSalesValue)],
+      ['Potential Gross Margin (INR):', num(data.inventorySummary.potentialGrossMargin)],
     ];
 
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-    // Sheet 2: Itemized Sales (Shows Product Name prominently)
-    const salesHeader = ['Date', 'Product Name', 'SKU', 'Qty', 'Unit Cost (INR)', 'Unit Price (INR)', 'Total Cost (INR)', 'Total Revenue (INR)', 'Actual Profit (INR)', 'Customer Name', 'Payment Method'];
+    // Sheet 2: Sales Performance (Prominent Product Name)
+    const salesHeader = ['Date', 'Product Name', 'SKU', 'Qty', 'Unit Cost (INR)', 'Unit Price (INR)', 'Total Cost (INR)', 'Revenue (INR)', 'Profit (INR)', 'Customer Name', 'Payment Method'];
     const salesDataRows = data.salesItems.map((s) => [
       s.date,
       s.productName,
       s.sku,
       s.quantity,
-      s.unitCost,
-      s.unitPrice,
-      s.totalCost,
-      s.totalRevenue,
-      s.actualProfit,
+      num(s.unitCost),
+      num(s.unitPrice),
+      num(s.totalCost),
+      num(s.totalRevenue),
+      num(s.actualProfit),
       s.customerName,
       s.paymentMethod,
     ]);
     const wsSales = XLSX.utils.aoa_to_sheet([salesHeader, ...salesDataRows]);
     XLSX.utils.book_append_sheet(wb, wsSales, 'Sales Performance');
 
-    // Sheet 3: Itemized Repairs
-    const repairHeader = ['Date', 'Job Ticket #', 'Customer Name', 'Device', 'Assigned Worker', 'Role', 'Service Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)', 'Amount Collected (INR)', 'Status'];
+    // Sheet 3: Repair Service
+    const repairHeader = ['Date', 'Job Ticket #', 'Customer Name', 'Device', 'Assigned Worker', 'Role', 'Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)', 'Collected (INR)', 'Status'];
     const repairDataRows = data.repairItems.map((r) => [
       r.repairDate,
       r.ticketNumber,
@@ -665,43 +651,43 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       r.deviceInfo,
       r.workerName,
       r.workerRole,
-      r.serviceRevenue,
-      r.partsCost,
-      r.netProfit,
-      r.ownerShare,
-      r.technicianShare,
-      r.amountCollected,
+      num(r.serviceRevenue),
+      num(r.partsCost),
+      num(r.netProfit),
+      num(r.ownerShare),
+      num(r.technicianShare),
+      num(r.amountCollected),
       r.status,
     ]);
     const wsRepairs = XLSX.utils.aoa_to_sheet([repairHeader, ...repairDataRows]);
     XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repair Service');
 
     // Sheet 4: Worker Performance
-    const workerHeader = ['Worker Name', 'Role', 'Completed Repairs', 'Service Revenue (INR)', 'Parts Cost (INR)', 'Net Repair Profit (INR)', 'Owner Share (INR)', 'Technician Payout (INR)'];
+    const workerHeader = ['Worker Name', 'Role', 'Completed Repairs', 'Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)'];
     const workerDataRows = data.workerPerformance.map((w) => [
       w.workerName,
       w.workerRole,
       w.completedRepairs,
-      w.serviceRevenue,
-      w.partsCost,
-      w.netProfit,
-      w.ownerShare,
-      w.technicianShare,
+      num(w.serviceRevenue),
+      num(w.partsCost),
+      num(w.netProfit),
+      num(w.ownerShare),
+      num(w.technicianShare),
     ]);
     const wsWorker = XLSX.utils.aoa_to_sheet([workerHeader, ...workerDataRows]);
     XLSX.utils.book_append_sheet(wb, wsWorker, 'Worker Performance');
 
     // Sheet 5: Inventory Catalog
-    const invHeader = ['Product Name', 'SKU', 'Category', 'Brand', 'Stock Qty', 'Cost Price (INR)', 'Selling Price (INR)', 'Total Cost Value (INR)', 'Stock Status'];
+    const invHeader = ['Product Name', 'SKU', 'Category', 'Brand', 'Stock Qty', 'Cost Price (INR)', 'Selling Price (INR)', 'Inventory Value (INR)', 'Stock Status'];
     const invDataRows = data.inventoryItems.map((i) => [
       i.productName,
       i.sku,
       i.categoryName,
       i.brandName,
       i.stockQuantity,
-      i.costPrice,
-      i.sellingPrice,
-      i.inventoryValue,
+      num(i.costPrice),
+      num(i.sellingPrice),
+      num(i.inventoryValue),
       i.status,
     ]);
     const wsInv = XLSX.utils.aoa_to_sheet([invHeader, ...invDataRows]);
@@ -715,10 +701,10 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       p.supplierName,
       p.productName,
       p.quantity,
-      p.unitCost,
-      p.totalCost,
-      p.discount,
-      p.finalAmount,
+      num(p.unitCost),
+      num(p.totalCost),
+      num(p.discount),
+      num(p.finalAmount),
       p.paymentStatus,
     ]);
     const wsPur = XLSX.utils.aoa_to_sheet([purHeader, ...purDataRows]);
@@ -737,7 +723,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     // Document Title & Subtitle Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('FAHAD ELECTRONICS', 14, currentY);
+    doc.text('FAHAD ERP', 14, currentY);
     currentY += 6;
 
     doc.setFontSize(12);
@@ -749,23 +735,23 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     doc.text(`Reporting Period: ${data.periodLabel}`, 14, currentY);
     currentY += 8;
 
-    // Helper for safe PDF currency formatting using "INR" to prevent font encoding corruption (e.g. ¹)
-    const fmt = (num: number) => `INR ${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // STRICT RULE: Plain numeric formatting ONLY. NO "₹", "Rs", "INR", or "¹" characters inside data cells!
+    const fmt = (num: number) => num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // 1. EXECUTIVE BUSINESS SUMMARY
+    // 1. BUSINESS SUMMARY
     autoTable(doc, {
       startY: currentY,
-      head: [['1. EXECUTIVE BUSINESS SUMMARY', 'Metric / Count Description', 'Amount (INR)']],
+      head: [['1. BUSINESS SUMMARY', 'Metric Description', 'Amount (INR)']],
       body: [
         ['Sales Revenue', `${data.salesSummary.salesCount} Completed POS Sales`, fmt(data.salesSummary.totalRevenue)],
         ['Product Cost Basis', 'Historical unit cost at sale time', fmt(data.salesSummary.totalCost)],
-        ['Product Gross Profit', 'Sales Revenue - Product Cost', fmt(data.salesSummary.totalProfit)],
-        ['Repair Service Revenue', `${data.repairSummary.deliveredCount} Delivered Repairs`, fmt(data.repairSummary.totalServiceRevenue)],
+        ['Product Profit', 'Sales Revenue - Product Cost', fmt(data.salesSummary.totalProfit)],
+        ['Repair Revenue', `${data.repairSummary.deliveredCount} Delivered Repairs`, fmt(data.repairSummary.totalServiceRevenue)],
         ['Repair Parts Cost', 'Component replacement cost', fmt(data.repairSummary.totalPartsCost)],
-        ['Net Repair Profit', 'Service Revenue - Parts Cost', fmt(data.repairSummary.netRepairProfit)],
+        ['Repair Profit', 'Service Revenue - Parts Cost', fmt(data.repairSummary.netRepairProfit)],
         ['Owner Repair Share', 'Owner profit allocation', fmt(data.repairSummary.totalOwnerShare)],
-        ['Technician Payout', 'Technician 70% share allocation', fmt(data.repairSummary.totalTechnicianPayout)],
-        ['TOTAL BUSINESS NET PROFIT', 'Sales Profit + Net Repair Profit', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
+        ['Technician Payout', 'Technician share allocation', fmt(data.repairSummary.totalTechnicianPayout)],
+        ['TOTAL BUSINESS PROFIT', 'Sales Profit + Net Repair Profit', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
       ],
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
@@ -777,7 +763,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     // 2. PAYMENT COLLECTION CHANNELS
     autoTable(doc, {
       startY: currentY,
-      head: [['2. PAYMENT COLLECTION CHANNELS', 'POS Sales Collection', 'Repair Collection', 'Total Collected']],
+      head: [['2. PAYMENT COLLECTION', 'POS Sales (INR)', 'Repairs (INR)', 'Total Collected (INR)']],
       body: [
         ['Cash Settlement', fmt(data.paymentSummary.posCash), fmt(data.paymentSummary.repairCash), fmt(data.paymentSummary.totalCash)],
         ['UPI Digital Transfer', fmt(data.paymentSummary.posUpi), fmt(data.paymentSummary.repairUpi), fmt(data.paymentSummary.totalUpi)],
@@ -791,7 +777,65 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
 
     currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // 3. WORKER REPAIR PERFORMANCE & SHARE
+    // 3. CURRENT INVENTORY VALUATION
+    autoTable(doc, {
+      startY: currentY,
+      head: [['3. CURRENT INVENTORY VALUATION', 'Metric / Value']],
+      body: [
+        ['Active Products in Catalog', data.inventorySummary.totalActiveProducts.toString()],
+        ['Total Stock Units', data.inventorySummary.totalStockUnits.toString()],
+        ['Current Inventory Cost Value (INR)', fmt(data.inventorySummary.currentInventoryValue)],
+        ['Potential Sales Value (INR)', fmt(data.inventorySummary.potentialSalesValue)],
+        ['Potential Inventory Profit (INR)', fmt(data.inventorySummary.potentialGrossMargin)],
+        ['Low Stock Alerts', data.inventorySummary.lowStockCount.toString()],
+        ['Out of Stock Items', data.inventorySummary.outOfStockCount.toString()],
+      ],
+      theme: 'plain',
+      headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 8.5 },
+    });
+
+    // PAGE 2: SALES PERFORMANCE
+    doc.addPage();
+    currentY = 15;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('4. SALES PERFORMANCE', 14, currentY);
+    currentY += 6;
+
+    const salesRows = data.salesItems.length > 0
+      ? data.salesItems.map((s) => [
+          s.productName,
+          s.quantity.toString(),
+          fmt(s.unitCost),
+          fmt(s.unitPrice),
+          fmt(s.totalCost),
+          fmt(s.totalRevenue),
+          fmt(s.actualProfit),
+        ])
+      : [['No sales transactions recorded in period', '0', fmt(0), fmt(0), fmt(0), fmt(0), fmt(0)]];
+
+    autoTable(doc, {
+      startY: currentY,
+      head: [['Product Name', 'Qty', 'Unit Cost (INR)', 'Unit Price (INR)', 'Total Cost (INR)', 'Revenue (INR)', 'Profit (INR)']],
+      body: salesRows,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 8 },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+
+    // PAGE 3: REPAIR SERVICE PERFORMANCE & WORKER ALLOCATION
+    doc.addPage();
+    currentY = 15;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('5. REPAIR SERVICE PERFORMANCE & WORKER ALLOCATION', 14, currentY);
+    currentY += 6;
+
     const workerRows = data.workerPerformance.length > 0
       ? data.workerPerformance.map((w) => [
           w.workerName,
@@ -807,50 +851,41 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
 
     autoTable(doc, {
       startY: currentY,
-      head: [['3. WORKER REPAIR PERFORMANCE', 'Role', 'Completed', 'Revenue', 'Parts Cost', 'Net Profit', 'Owner Share', 'Tech Share']],
+      head: [['Worker Name', 'Role', 'Services', 'Revenue (INR)', 'Parts (INR)', 'Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)']],
       body: workerRows,
       theme: 'grid',
       headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
     currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // 4. CURRENT INVENTORY VALUATION
-    autoTable(doc, {
-      startY: currentY,
-      head: [['4. CURRENT INVENTORY VALUATION', 'Value / Metric']],
-      body: [
-        ['Active Products in Catalog', data.inventorySummary.totalActiveProducts.toString()],
-        ['Total Stock Units', data.inventorySummary.totalStockUnits.toString()],
-        ['Current Inventory Cost Value', fmt(data.inventorySummary.currentInventoryValue)],
-        ['Potential Sales Value', fmt(data.inventorySummary.potentialSalesValue)],
-        ['Potential Inventory Gross Profit', fmt(data.inventorySummary.potentialGrossMargin)],
-        ['Low Stock Alerts', data.inventorySummary.lowStockCount.toString()],
-        ['Out of Stock Items', data.inventorySummary.outOfStockCount.toString()],
-      ],
-      theme: 'plain',
-      headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
-    });
+    // PURCHASES SUMMARY (IF PURCHASES EXIST)
+    if (data.purchaseItems.length > 0) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('6. PURCHASES SUMMARY', 14, currentY);
+      currentY += 6;
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+      const purRows = data.purchaseItems.map((p) => [
+        p.purchaseDate,
+        p.supplierName,
+        p.productName,
+        p.quantity.toString(),
+        fmt(p.unitCost),
+        fmt(p.totalCost),
+        fmt(p.finalAmount),
+      ]);
 
-    // 5. FINAL BUSINESS PROFIT SUMMARY
-    autoTable(doc, {
-      startY: currentY,
-      head: [['5. FINAL BUSINESS PROFIT SUMMARY', 'Amount (INR)']],
-      body: [
-        ['Product Gross Profit', fmt(data.salesSummary.totalProfit)],
-        ['Net Repair Profit', fmt(data.repairSummary.netRepairProfit)],
-        ['TOTAL BUSINESS NET PROFIT', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
-        ['OWNER RETAINED PROFIT SHARE', fmt(data.salesSummary.totalProfit + data.repairSummary.totalOwnerShare)],
-        ['TECHNICIAN PAYOUT SHARE', fmt(data.repairSummary.totalTechnicianPayout)],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
-    });
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Date', 'Supplier', 'Product', 'Qty', 'Unit Cost (INR)', 'Line Cost (INR)', 'Final Amount (INR)']],
+        body: purRows,
+        theme: 'striped',
+        headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 8 },
+      });
+    }
 
     // Save PDF
     const cleanLabel = data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_');
