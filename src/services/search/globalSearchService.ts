@@ -65,7 +65,7 @@ export const globalSearchService = {
           title: c.full_name,
           subtitle: c.phone ? `Phone: ${c.phone}` : 'Customer Record',
           badge: 'CUSTOMER',
-          link: '/pos',
+          link: `/customers?id=${c.id}&search=${encodeURIComponent(c.full_name)}`,
         });
       });
     }
@@ -79,7 +79,7 @@ export const globalSearchService = {
           title: p.name,
           subtitle: `Code: ${p.product_code || 'N/A'} • Stock: ${p.stock_quantity}`,
           badge: 'PRODUCT',
-          link: '/inventory',
+          link: `/inventory/products?search=${encodeURIComponent(p.name)}`,
         });
       });
     }
@@ -91,9 +91,9 @@ export const globalSearchService = {
           id: s.id,
           type: 'SALE',
           title: s.sale_number,
-          subtitle: `Customer: ${s.customer?.full_name || 'Walk-in'} • ₹${Number(s.total_amount || 0)}`,
+          subtitle: `Customer: ${s.customer?.full_name || 'Walk-in'} • Amount: ${Number(s.total_amount || 0)}`,
           badge: s.payment_status,
-          link: '/pos',
+          link: `/sales?search=${encodeURIComponent(s.sale_number)}`,
         });
       });
     }
@@ -107,7 +107,7 @@ export const globalSearchService = {
           title: `${r.job_number} — ${r.device_brand} ${r.device_type}`,
           subtitle: `Customer: ${r.customer?.full_name || 'N/A'}`,
           badge: r.status,
-          link: '/repairs',
+          link: `/repairs?id=${r.id}`,
         });
       });
     }

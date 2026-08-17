@@ -578,6 +578,8 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           repairId={displayJob.id}
           currentStatus={displayJob.status}
           isOwner={isOwner}
+          serviceRevenue={displayJob.service_revenue}
+          paymentsTotalAmount={paymentsTotalAmount}
           onClose={() => setIsStatusModalOpen(false)}
           onSuccess={() => {
             loadJobData(displayJob.id);

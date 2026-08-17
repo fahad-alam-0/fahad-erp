@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RepairStatus } from '../types/repair.types';
 import { repairService } from '../services/repairService';
+import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
   X,
@@ -14,6 +15,7 @@ import {
   Ban,
   Clock,
   Check,
+  Lock,
 } from 'lucide-react';
 
 interface UpdateStatusModalProps {
@@ -21,6 +23,8 @@ interface UpdateStatusModalProps {
   repairId: string | null;
   currentStatus: RepairStatus | null;
   isOwner: boolean;
+  serviceRevenue?: number;
+  paymentsTotalAmount?: number;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -38,6 +42,8 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
   repairId,
   currentStatus,
   isOwner,
+  serviceRevenue = 0,
+  paymentsTotalAmount = 0,
   onClose,
   onSuccess,
 }) => {
@@ -46,14 +52,19 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const remainingDue = Math.max(0, serviceRevenue - paymentsTotalAmount);
+  const isDeliveryBlocked = remainingDue > 0.01;
+
   useEffect(() => {
     if (isOpen && currentStatus) {
       const allowed = getValidNextStatuses(currentStatus, isOwner);
-      setSelectedStatus(allowed.length > 0 ? allowed[0] : null);
+      // Default to first non-blocked allowed status
+      const selectable = allowed.find((st) => !(st === 'DELIVERED' && isDeliveryBlocked));
+      setSelectedStatus(selectable || (allowed.length > 0 ? allowed[0] : null));
       setNotes('');
       setErrorMsg(null);
     }
-  }, [isOpen, currentStatus, isOwner]);
+  }, [isOpen, currentStatus, isOwner, isDeliveryBlocked]);
 
   if (!isOpen || !repairId || !currentStatus) return null;
 
@@ -63,6 +74,11 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
     e.preventDefault();
     if (!selectedStatus) {
       setErrorMsg('Please select a valid next status state.');
+      return;
+    }
+
+    if (selectedStatus === 'DELIVERED' && isDeliveryBlocked) {
+      setErrorMsg(`Cannot mark repair as DELIVERED until full payment is collected. Amount Due: ${formatCurrency(remainingDue, 'INR')}`);
       return;
     }
 
@@ -163,10 +179,19 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
             </div>
           )}
 
-          {/* Current Status Badge */}
-          <div className="p-3 bg-muted/30 rounded-lg border border-border text-xs flex items-center justify-between">
-            <span className="text-muted-foreground font-semibold">Current State:</span>
-            <span className="font-bold text-primary font-mono">{currentStatus}</span>
+          {/* Current Status & Financial Payment Overview */}
+          <div className="p-3 bg-muted/30 rounded-lg border border-border text-xs space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground font-semibold">Current Status:</span>
+              <span className="font-bold text-primary font-mono">{currentStatus}</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-border/50 text-[11px] font-mono">
+              <span className="text-muted-foreground">Amount: {formatCurrency(serviceRevenue, 'INR')}</span>
+              <span className="text-muted-foreground">Paid: {formatCurrency(paymentsTotalAmount, 'INR')}</span>
+              <span className={`font-bold ${remainingDue > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600'}`}>
+                Due: {formatCurrency(remainingDue, 'INR')}
+              </span>
+            </div>
           </div>
 
           {/* Direct Clickable Status Cards */}
@@ -190,28 +215,42 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
                     colorClass: 'border-border bg-card',
                   };
 
+                  const isBlocked = st === 'DELIVERED' && isDeliveryBlocked;
                   const isSelected = selectedStatus === st;
 
                   return (
                     <div
                       key={st}
-                      onClick={() => setSelectedStatus(st)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start space-x-3 pressable ${
-                        isSelected
-                          ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs'
-                          : 'border-border bg-card hover:bg-muted/40'
+                      onClick={() => {
+                        if (!isBlocked) {
+                          setSelectedStatus(st);
+                        }
+                      }}
+                      className={`p-3 rounded-xl border transition-all flex items-start space-x-3 ${
+                        isBlocked
+                          ? 'opacity-60 bg-muted/30 border-muted-foreground/30 cursor-not-allowed'
+                          : isSelected
+                          ? 'border-primary ring-2 ring-primary/20 bg-primary/10 shadow-xs cursor-pointer pressable'
+                          : 'border-border bg-card hover:bg-muted/40 cursor-pointer pressable'
                       }`}
                     >
                       <div className="p-2 rounded-lg bg-background border border-border shrink-0 mt-0.5">
-                        {meta.icon}
+                        {isBlocked ? <Lock className="w-4 h-4 text-amber-500" /> : meta.icon}
                       </div>
 
                       <div className="flex-1 truncate">
                         <div className="flex items-center justify-between">
                           <p className="text-xs font-bold text-foreground font-mono">{meta.label}</p>
-                          {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                          {isSelected && !isBlocked && <Check className="w-4 h-4 text-primary shrink-0" />}
+                          {isBlocked && (
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono px-1.5 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded">
+                              LOCKED (DUE: {formatCurrency(remainingDue, 'INR')})
+                            </span>
+                          )}
                         </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{meta.description}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {isBlocked ? 'Collect full payment before marking this repair as delivered.' : meta.description}
+                        </p>
                       </div>
                     </div>
                   );
@@ -225,7 +264,7 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
             <label className="text-xs font-semibold text-muted-foreground">Status History Log Notes (Optional)</label>
             <input
               type="text"
-              placeholder="e.g. Replacement LCD screen installed and tested OK..."
+              placeholder="e.g. Full payment collected at counter, device delivered to customer..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
@@ -237,7 +276,12 @@ export const UpdateStatusModal: React.FC<UpdateStatusModalProps> = ({
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={isSubmitting || !selectedStatus} className="pressable">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isSubmitting || !selectedStatus || (selectedStatus === 'DELIVERED' && isDeliveryBlocked)}
+              className="pressable bg-primary text-primary-foreground font-bold"
+            >
               {isSubmitting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
               <span>Update Status</span>
             </Button>

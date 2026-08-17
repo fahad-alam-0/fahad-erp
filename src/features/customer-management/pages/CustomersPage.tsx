@@ -9,10 +9,16 @@ import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
 import { UserPlus, Search, X, Users, RefreshCw, AlertCircle } from 'lucide-react';
 
+import { useSearchParams } from 'react-router-dom';
+
 export const CustomersPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const paramSearch = searchParams.get('search');
+  const paramId = searchParams.get('id');
+
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(paramSearch || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(paramSearch || '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +27,17 @@ export const CustomersPage: React.FC = () => {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedCustomerForDetail, setSelectedCustomerForDetail] = useState<Customer | null>(null);
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+
+  // Auto-select customer from URL query param `id`
+  useEffect(() => {
+    if (paramId && customers.length > 0) {
+      const found = customers.find((c) => c.id === paramId);
+      if (found) {
+        setSelectedCustomerForDetail(found);
+        setIsDetailDrawerOpen(true);
+      }
+    }
+  }, [paramId, customers]);
 
   // Debounce search query input (300ms)
   useEffect(() => {
