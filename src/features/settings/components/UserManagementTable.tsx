@@ -11,8 +11,9 @@ import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
 import { Search, X, RefreshCw, AlertCircle, ShieldCheck, User, Crown, Trash2 } from 'lucide-react';
 
 export const UserManagementTable: React.FC = () => {
-  const { user: currentUser } = useAuthStore();
-  const isOwner = currentUser?.role === 'OWNER';
+  const { profile, role: storeRole } = useAuthStore();
+  const userRole = profile?.role || storeRole || 'STAFF';
+  const isOwner = userRole === 'OWNER';
 
   const [users, setUsers] = useState<UserProfileData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
