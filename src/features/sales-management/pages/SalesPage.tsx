@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Sale } from '../types/sales.types';
+import { Sale, SaleReturn } from '../types/sales.types';
 import { salesService } from '../services/salesService';
 import { PosTerminal } from '../components/PosTerminal';
 import { SalesTable } from '../components/SalesTable';
+import { ReturnHistoryTable } from '../components/ReturnHistoryTable';
+import { ReturnProductModal } from '../components/ReturnProductModal';
 import { SaleDetailModal } from '../components/SaleDetailModal';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -11,26 +13,31 @@ import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
 import {
   ShoppingCart,
   History,
+  RotateCcw,
   Search,
   X,
   RefreshCw,
   AlertCircle,
   Receipt,
   TrendingUp,
-  CreditCard,
 } from 'lucide-react';
 
 export const SalesPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'pos' | 'history'>('pos');
+  const [activeTab, setActiveTab] = useState<'pos' | 'history' | 'returns'>('pos');
 
   const [sales, setSales] = useState<Sale[]>([]);
+  const [returns, setReturns] = useState<SaleReturn[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isLoadingSales, setIsLoadingSales] = useState(true);
+  const [isLoadingReturns, setIsLoadingReturns] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedSaleDetail, setSelectedSaleDetail] = useState<Sale | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+
+  const [selectedSaleForReturn, setSelectedSaleForReturn] = useState<Sale | null>(null);
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
 
   // Debounce sales log search (300ms)
   useEffect(() => {
@@ -54,28 +61,59 @@ export const SalesPage: React.FC = () => {
     }
   }, [debouncedSearch]);
 
+  const loadReturnsHistory = useCallback(async () => {
+    try {
+      setIsLoadingReturns(true);
+      const data = await salesService.getSaleReturns({ search: debouncedSearch });
+      setReturns(data);
+    } catch (err: any) {
+      console.error('Failed to load returns history:', err);
+    } finally {
+      setIsLoadingReturns(false);
+    }
+  }, [debouncedSearch]);
+
   useEffect(() => {
-    loadSalesHistory();
-  }, [loadSalesHistory]);
+    if (activeTab === 'history') {
+      loadSalesHistory();
+    } else if (activeTab === 'returns') {
+      loadReturnsHistory();
+    } else {
+      loadSalesHistory();
+    }
+  }, [activeTab, loadSalesHistory, loadReturnsHistory]);
 
   const handleViewSaleDetails = (sale: Sale) => {
     setSelectedSaleDetail(sale);
     setIsDetailModalOpen(true);
   };
 
+  const handleOpenReturnModal = (sale: Sale) => {
+    setSelectedSaleForReturn(sale);
+    setIsReturnModalOpen(true);
+  };
+
+  const handleReturnSuccess = () => {
+    loadSalesHistory();
+    if (activeTab === 'returns') {
+      loadReturnsHistory();
+    }
+  };
+
   // KPI Calculations
   const todayStr = new Date().toISOString().split('T')[0];
   const todaySales = sales.filter((s) => s.created_at.startsWith(todayStr));
-  const todayTotalAmount = todaySales.reduce((sum, s) => sum + s.total_amount, 0);
+  const todayTotalGross = todaySales.reduce((sum, s) => sum + s.total_amount, 0);
+  const todayTotalReturns = todaySales.reduce((sum, s) => sum + (s.returned_amount || 0), 0);
+  const todayNetSales = Math.max(0, todayTotalGross - todayTotalReturns);
   const todayCount = todaySales.length;
-  const avgInvoiceAmount = todayCount > 0 ? todayTotalAmount / todayCount : 0;
 
   return (
     <div className="space-y-6">
       {/* Page Header */}
       <PageHeader
         title="Retail Point of Sale (POS) & Sales Log"
-        subtitle="Process customer checkouts, settle split payments, and inspect sales invoice records."
+        subtitle="Process customer checkouts, settle split payments, manage product returns, and inspect sales invoice records."
         actions={
           <div className="flex items-center space-x-2">
             {activeTab !== 'pos' && (
@@ -97,11 +135,16 @@ export const SalesPage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Today's POS Sales Revenue
+              Today's Net POS Sales
             </span>
             <span className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(todayTotalAmount, 'INR')}
+              {formatCurrency(todayNetSales, 'INR')}
             </span>
+            {todayTotalReturns > 0 && (
+              <span className="text-[10px] text-amber-500 font-mono block">
+                ({formatCurrency(todayTotalReturns, 'INR')} returned)
+              </span>
+            )}
           </div>
           <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500">
             <TrendingUp className="w-5 h-5" />
@@ -125,23 +168,23 @@ export const SalesPage: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-card border border-border flex items-center justify-between shadow-2xs">
           <div>
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Average Invoice Size
+              Total Refunds Processed
             </span>
-            <span className="text-xl font-bold font-mono text-foreground">
-              {formatCurrency(avgInvoiceAmount, 'INR')}
+            <span className="text-xl font-bold font-mono text-amber-500">
+              {formatCurrency(todayTotalReturns, 'INR')}
             </span>
           </div>
-          <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500">
-            <CreditCard className="w-5 h-5" />
+          <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+            <RotateCcw className="w-5 h-5" />
           </div>
         </div>
       </div>
 
       {/* Tabs Selection Bar */}
-      <div className="flex border-b border-border bg-card rounded-t-xl px-4 pt-2 shadow-2xs">
+      <div className="flex border-b border-border bg-card rounded-t-xl px-4 pt-2 shadow-2xs overflow-x-auto">
         <button
           onClick={() => setActiveTab('pos')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'pos'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -153,7 +196,7 @@ export const SalesPage: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
             activeTab === 'history'
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -161,6 +204,18 @@ export const SalesPage: React.FC = () => {
         >
           <History className="w-4 h-4" />
           <span>Completed Sales Log ({sales.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('returns')}
+          className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === 'returns'
+              ? 'border-amber-500 text-amber-500'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span>Returns History</span>
         </button>
       </div>
 
@@ -243,8 +298,52 @@ export const SalesPage: React.FC = () => {
               )}
             </div>
           ) : (
-            <SalesTable sales={sales} onViewDetails={handleViewSaleDetails} />
+            <SalesTable
+              sales={sales}
+              onViewDetails={handleViewSaleDetails}
+              onReturnProduct={handleOpenReturnModal}
+            />
           )}
+        </div>
+      )}
+
+      {/* TAB 3: RETURNS HISTORY */}
+      {activeTab === 'returns' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-card border border-border shadow-2xs">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search by return number, invoice #, customer, or product..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full text-xs pl-9 pr-8 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-muted-foreground hover:text-foreground absolute right-2.5 top-2.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={loadReturnsHistory}
+              disabled={isLoadingReturns}
+              className="h-8 px-2.5 text-xs pressable"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isLoadingReturns ? 'animate-spin text-amber-500' : ''}`}
+              />
+            </Button>
+          </div>
+
+          <ReturnHistoryTable returns={returns} isLoading={isLoadingReturns} />
         </div>
       )}
 
@@ -253,6 +352,14 @@ export const SalesPage: React.FC = () => {
         isOpen={isDetailModalOpen}
         sale={selectedSaleDetail}
         onClose={() => setIsDetailModalOpen(false)}
+      />
+
+      {/* Return Product Modal */}
+      <ReturnProductModal
+        isOpen={isReturnModalOpen}
+        sale={selectedSaleForReturn}
+        onClose={() => setIsReturnModalOpen(false)}
+        onSuccess={handleReturnSuccess}
       />
     </div>
   );
