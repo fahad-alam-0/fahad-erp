@@ -30,6 +30,7 @@ import {
   RefreshCw,
   AlertCircle,
   Award,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 export const ReportsPage: React.FC = () => {
@@ -155,7 +156,7 @@ export const ReportsPage: React.FC = () => {
         }
       />
 
-      {/* Owner Business Report Generator Card */}
+      {/* Prominent Business Report Generator Widget (Owner Only) */}
       {isOwner && (
         <BusinessReportGeneratorWidget userRole={userRole} />
       )}
@@ -173,6 +174,20 @@ export const ReportsPage: React.FC = () => {
           >
             <ShieldCheck className="w-4 h-4" />
             <span>Executive Financial Overview</span>
+          </button>
+        )}
+
+        {isOwner && (
+          <button
+            onClick={() => setActiveTab('export')}
+            className={`px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors ${
+              activeTab === 'export'
+                ? 'bg-primary text-primary-foreground shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Business Report Generator (Excel / PDF)</span>
           </button>
         )}
 
@@ -260,6 +275,12 @@ export const ReportsPage: React.FC = () => {
             <div className="space-y-6">
               <OwnerFinancialOverviewWidget data={ownerFinancialData} isLoading={isLoading} />
               <RepairServicePerformanceWidget data={repairPerformanceData} isLoading={isLoading} userRole={userRole} />
+            </div>
+          )}
+
+          {activeTab === 'export' && isOwner && (
+            <div className="space-y-6">
+              <BusinessReportGeneratorWidget userRole={userRole} />
             </div>
           )}
 

@@ -17,12 +17,10 @@ import {
 } from 'lucide-react';
 
 interface BusinessReportGeneratorWidgetProps {
-  userRole: string;
+  userRole?: string;
 }
 
-export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidgetProps> = ({ userRole }) => {
-  const isOwner = userRole === 'OWNER';
-
+export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidgetProps> = ({ userRole = 'OWNER' }) => {
   const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>('THIS_MONTH');
   const [customStartDate, setCustomStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
@@ -40,8 +38,8 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
   const [previewData, setPreviewData] = useState<DetailedReportData | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
-  // OWNER Access Guard
-  if (!isOwner) {
+  // Strict role protection: STAFF and TECHNICIAN are barred from viewing/downloading owner reports
+  if (userRole === 'STAFF' || userRole === 'TECHNICIAN') {
     return null;
   }
 
@@ -126,19 +124,19 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
   };
 
   return (
-    <Card className="border-border bg-card shadow-2xs overflow-hidden">
-      <CardHeader className="p-4 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+    <Card className="border-border bg-card shadow-md overflow-hidden my-4">
+      <CardHeader className="p-4 border-b border-border bg-muted/30 flex flex-row items-center justify-between">
         <div className="space-y-0.5">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
-            <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+            <FileSpreadsheet className="w-5 h-5 text-emerald-500" />
             <span>Business Report Generator</span>
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Generate and download comprehensive Excel or PDF financial reports for any selected period.
+            Generate and download comprehensive Excel (.xlsx) or PDF (.pdf) financial reports for any selected period.
           </p>
         </div>
         <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-          OWNER ACCESS
+          OWNER EXCLUSIVE
         </span>
       </CardHeader>
 
