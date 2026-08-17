@@ -9,8 +9,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { User, Users, Sliders, ShieldCheck, Info } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { user } = useAuthStore();
-  const userRole = user?.role || 'STAFF';
+  const { profile, role: storeRole } = useAuthStore();
+  const userRole = profile?.role || storeRole || 'STAFF';
   const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState<string>('profile');
