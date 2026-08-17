@@ -57,7 +57,7 @@ export const settingsService = {
   },
 
   async setUserRole(targetUserId: string, newRole: UserRole): Promise<void> {
-    // Strictly call Migration 003 RPC: private.set_user_role
+    // Call RPC: private.set_user_role
     const { error } = await supabase.schema('private').rpc('set_user_role', {
       target_user_id: targetUserId,
       new_role: newRole,
@@ -66,6 +66,30 @@ export const settingsService = {
     if (error) {
       console.error('Error executing set_user_role RPC:', error);
       throw new Error(error.message || 'Failed to modify user role.');
+    }
+  },
+
+  async deleteUserPermanently(targetUserId: string): Promise<void> {
+    // Call RPC: private.delete_user_permanently
+    const { error } = await supabase.schema('private').rpc('delete_user_permanently', {
+      p_target_user_id: targetUserId,
+    });
+
+    if (error) {
+      console.error('Error executing delete_user_permanently RPC:', error);
+      throw new Error(error.message || 'Failed to permanently delete user.');
+    }
+  },
+
+  async transferPrimaryOwnership(newOwnerId: string): Promise<void> {
+    // Call RPC: private.transfer_primary_ownership
+    const { error } = await supabase.schema('private').rpc('transfer_primary_ownership', {
+      p_new_owner_id: newOwnerId,
+    });
+
+    if (error) {
+      console.error('Error executing transfer_primary_ownership RPC:', error);
+      throw new Error(error.message || 'Failed to transfer primary ownership.');
     }
   },
 };

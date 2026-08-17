@@ -1,13 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserProfileData } from '../types/settings.types';
 import { settingsService } from '../services/settingsService';
+import { useAuthStore } from '@/store/useAuthStore';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { ChangeRoleModal } from './ChangeRoleModal';
+import { DeleteUserModal } from './DeleteUserModal';
+import { TransferOwnershipModal } from './TransferOwnershipModal';
 import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
-import { Search, X, RefreshCw, AlertCircle, ShieldCheck, User } from 'lucide-react';
+import { Search, X, RefreshCw, AlertCircle, ShieldCheck, User, Crown, Trash2 } from 'lucide-react';
 
 export const UserManagementTable: React.FC = () => {
+  const { user: currentUser } = useAuthStore();
+  const isOwner = currentUser?.role === 'OWNER';
+
   const [users, setUsers] = useState<UserProfileData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -19,6 +25,11 @@ export const UserManagementTable: React.FC = () => {
 
   const [selectedUserForRoleChange, setSelectedUserForRoleChange] = useState<UserProfileData | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+
+  const [selectedUserForDelete, setSelectedUserForDelete] = useState<UserProfileData | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
   // Debounce search (300ms)
   useEffect(() => {
@@ -55,6 +66,17 @@ export const UserManagementTable: React.FC = () => {
     setIsRoleModalOpen(true);
   };
 
+  const handleDeleteUserClick = (u: UserProfileData) => {
+    if (u.role === 'OWNER') {
+      alert('Primary ownership must be transferred before this account can be removed.');
+      return;
+    }
+    setSelectedUserForDelete(u);
+    setIsDeleteModalOpen(true);
+  };
+
+  const primaryOwnerUser = users.find((u) => u.role === 'OWNER') || null;
+
   return (
     <div className="space-y-4">
       {/* Search & Filters Toolbar */}
@@ -81,6 +103,19 @@ export const UserManagementTable: React.FC = () => {
 
           <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs text-muted-foreground">
             <span className="font-mono font-medium">{users.length} Registered Accounts</span>
+            
+            {isOwner && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsTransferModalOpen(true)}
+                className="h-8 px-2.5 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 pressable"
+              >
+                <Crown className="w-3.5 h-3.5 mr-1" />
+                <span>Transfer Ownership</span>
+              </Button>
+            )}
+
             <Button
               variant="ghost"
               size="sm"
@@ -108,8 +143,9 @@ export const UserManagementTable: React.FC = () => {
           >
             <option value="ALL">All Roles</option>
             <option value="OWNER">OWNER</option>
-            <option value="TECHNICIAN">TECHNICIAN</option>
+            <option value="ADMIN">ADMIN</option>
             <option value="STAFF">STAFF</option>
+            <option value="TECHNICIAN">TECHNICIAN</option>
           </select>
 
           <select
@@ -163,62 +199,121 @@ export const UserManagementTable: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-3 font-semibold text-foreground">{u.full_name}</td>
-                    <td className="p-3 font-mono text-muted-foreground">{u.phone || 'N/A'}</td>
-                    <td className="p-3">
-                      <StatusBadge status={u.role} />
-                    </td>
-                    <td className="p-3">
-                      <StatusBadge status={u.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                    </td>
-                    <td className="p-3 text-muted-foreground font-mono text-[11px]">
-                      {new Date(u.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleChangeRoleClick(u)}
-                        className="h-8 px-2.5 text-xs pressable"
-                      >
-                        <ShieldCheck className="w-3.5 h-3.5 mr-1 text-primary" />
-                        <span>Change Role</span>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {users.map((u) => {
+                  const isUserPrimaryOwner = u.role === 'OWNER';
+                  return (
+                    <tr key={u.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="p-3 font-semibold text-foreground flex items-center space-x-2">
+                        <span>{u.full_name}</span>
+                        {isUserPrimaryOwner && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center gap-0.5">
+                            <Crown className="w-2.5 h-2.5" /> PRIMARY OWNER
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 font-mono text-muted-foreground">{u.phone || 'N/A'}</td>
+                      <td className="p-3">
+                        <StatusBadge status={u.role} />
+                      </td>
+                      <td className="p-3">
+                        <StatusBadge status={u.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                      </td>
+                      <td className="p-3 text-muted-foreground font-mono text-[11px]">
+                        {new Date(u.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end space-x-1.5">
+                          {/* Change Role Button */}
+                          {(!isUserPrimaryOwner || isOwner) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isUserPrimaryOwner}
+                              onClick={() => handleChangeRoleClick(u)}
+                              className="h-8 px-2.5 text-xs pressable"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 mr-1 text-primary" />
+                              <span>Change Role</span>
+                            </Button>
+                          )}
+
+                          {/* Delete Permanently Button (OWNER only) */}
+                          {isOwner && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteUserClick(u)}
+                              title={isUserPrimaryOwner ? "Primary ownership must be transferred before this account can be removed." : "Permanently delete user and records"}
+                              className={`h-8 px-2 text-xs pressable ${
+                                isUserPrimaryOwner
+                                  ? 'opacity-40 cursor-not-allowed text-muted-foreground'
+                                  : 'text-destructive border-destructive/30 hover:bg-destructive/10'
+                              }`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" />
+                              <span>Delete</span>
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile View (<768px) */}
           <div className="md:hidden divide-y divide-border">
-            {users.map((u) => (
-              <div key={u.id} className="p-4 space-y-3 hover:bg-muted/30 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-xs text-foreground">{u.full_name}</h4>
-                    <p className="text-[11px] font-mono text-muted-foreground">{u.phone || 'No Phone'}</p>
+            {users.map((u) => {
+              const isUserPrimaryOwner = u.role === 'OWNER';
+              return (
+                <div key={u.id} className="p-4 space-y-3 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs text-foreground flex items-center gap-1">
+                        <span>{u.full_name}</span>
+                        {isUserPrimaryOwner && <Crown className="w-3 h-3 text-amber-500" />}
+                      </h4>
+                      <p className="text-[11px] font-mono text-muted-foreground">{u.phone || 'No Phone'}</p>
+                    </div>
+                    <StatusBadge status={u.role} />
                   </div>
-                  <StatusBadge status={u.role} />
-                </div>
 
-                <div className="flex items-center justify-between pt-1">
-                  <StatusBadge status={u.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleChangeRoleClick(u)}
-                    className="h-8 text-xs pressable"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1 text-primary" />
-                    <span>Change Role</span>
-                  </Button>
+                  <div className="flex items-center justify-between pt-1">
+                    <StatusBadge status={u.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                    <div className="flex items-center space-x-1.5">
+                      {!isUserPrimaryOwner && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleChangeRoleClick(u)}
+                          className="h-8 text-xs pressable"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 mr-1 text-primary" />
+                          <span>Role</span>
+                        </Button>
+                      )}
+
+                      {isOwner && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteUserClick(u)}
+                          className={`h-8 text-xs ${
+                            isUserPrimaryOwner
+                              ? 'opacity-40 cursor-not-allowed'
+                              : 'text-destructive border-destructive/30'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -228,6 +323,23 @@ export const UserManagementTable: React.FC = () => {
         isOpen={isRoleModalOpen}
         targetUser={selectedUserForRoleChange}
         onClose={() => setIsRoleModalOpen(false)}
+        onSuccess={loadUsers}
+      />
+
+      {/* Permanent Deletion Confirmation Modal */}
+      <DeleteUserModal
+        isOpen={isDeleteModalOpen}
+        targetUser={selectedUserForDelete}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onSuccess={loadUsers}
+      />
+
+      {/* Primary Ownership Transfer Modal */}
+      <TransferOwnershipModal
+        isOpen={isTransferModalOpen}
+        currentOwner={primaryOwnerUser}
+        activeUsers={users}
+        onClose={() => setIsTransferModalOpen(false)}
         onSuccess={loadUsers}
       />
     </div>

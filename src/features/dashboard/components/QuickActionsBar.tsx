@@ -25,6 +25,7 @@ export const QuickActionsBar: React.FC<QuickActionsBarProps> = ({ role }) => {
   const getActions = () => {
     switch (role) {
       case UserRole.OWNER:
+      case UserRole.ADMIN:
         return [
           { label: 'New Sale (POS)', path: ROUTES.SALES, icon: ShoppingCart, variant: 'default' as const },
           { label: 'New Repair Intake', path: ROUTES.REPAIRS.ROOT, icon: Wrench, variant: 'outline' as const },
@@ -41,6 +42,7 @@ export const QuickActionsBar: React.FC<QuickActionsBarProps> = ({ role }) => {
           { label: 'Stock Overview', path: ROUTES.INVENTORY.ROOT, icon: Package, variant: 'outline' as const },
         ];
       case UserRole.TECHNICIAN:
+      default:
         return [
           { label: 'My Repair Jobs', path: ROUTES.REPAIRS.ROOT, icon: Wrench, variant: 'default' as const },
           { label: 'Update Job Status', path: ROUTES.REPAIRS.REPAIR_STATUS, icon: Sliders, variant: 'outline' as const },

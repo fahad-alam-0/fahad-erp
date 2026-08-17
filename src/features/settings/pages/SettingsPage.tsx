@@ -11,7 +11,7 @@ import { User, Users, Sliders, ShieldCheck, Info } from 'lucide-react';
 export const SettingsPage: React.FC = () => {
   const { user } = useAuthStore();
   const userRole = user?.role || 'STAFF';
-  const isOwner = userRole === 'OWNER';
+  const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState<string>('profile');
 
@@ -37,7 +37,7 @@ export const SettingsPage: React.FC = () => {
           <span>My Profile</span>
         </button>
 
-        {isOwner && (
+        {isOwnerOrAdmin && (
           <button
             onClick={() => setActiveTab('users')}
             className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors shrink-0 ${
@@ -47,7 +47,7 @@ export const SettingsPage: React.FC = () => {
             }`}
           >
             <Users className="w-4 h-4 text-emerald-500" />
-            <span>Users & Roles (Owner Only)</span>
+            <span>Users & Roles</span>
           </button>
         )}
 
@@ -90,7 +90,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Tab Contents */}
       {activeTab === 'profile' && <ProfileSection />}
-      {activeTab === 'users' && isOwner && <UserManagementTable />}
+      {activeTab === 'users' && isOwnerOrAdmin && <UserManagementTable />}
       {activeTab === 'app' && <ApplicationSettingsSection />}
       {activeTab === 'security' && <SecuritySection />}
       {activeTab === 'info' && <SystemInfoSection />}

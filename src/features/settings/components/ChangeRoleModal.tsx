@@ -24,12 +24,36 @@ export const ChangeRoleModal: React.FC<ChangeRoleModalProps> = ({
 
   useEffect(() => {
     if (isOpen && targetUser) {
-      setSelectedRole(targetUser.role);
+      setSelectedRole(targetUser.role === UserRole.OWNER ? UserRole.ADMIN : targetUser.role);
       setErrorMsg(null);
     }
   }, [isOpen, targetUser]);
 
   if (!isOpen || !targetUser) return null;
+
+  if (targetUser.role === UserRole.OWNER) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs">
+        <div className="bg-card border border-amber-500/40 rounded-xl shadow-lg w-full max-w-md p-5 space-y-4 text-xs">
+          <div className="flex items-center space-x-2 text-amber-500 font-bold text-sm">
+            <ShieldAlert className="w-5 h-5" />
+            <span>PRIMARY OWNER ROLE PROTECTED</span>
+          </div>
+          <p className="text-muted-foreground">
+            The Primary OWNER role cannot be changed directly using simple role modification.
+          </p>
+          <p className="font-semibold text-foreground">
+            Primary ownership must be transferred to another user using the "Transfer Ownership" button.
+          </p>
+          <div className="flex justify-end pt-2">
+            <Button size="sm" variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +82,7 @@ export const ChangeRoleModal: React.FC<ChangeRoleModalProps> = ({
         <div className="p-4 border-b border-border flex items-center justify-between bg-muted/30">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-500" />
-            <span>Modify User System Role (RPC)</span>
+            <span>Modify User System Role</span>
           </h3>
           <button
             onClick={onClose}
@@ -90,16 +114,16 @@ export const ChangeRoleModal: React.FC<ChangeRoleModalProps> = ({
               onChange={(e) => setSelectedRole(e.target.value as UserRole)}
               className="w-full text-xs px-3 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
             >
-              <option value={UserRole.OWNER}>OWNER (Full Administrative & Profit Visibility)</option>
-              <option value={UserRole.TECHNICIAN}>TECHNICIAN (Assigned Repairs & 70% Profit Share)</option>
-              <option value={UserRole.STAFF}>STAFF (Store Counter POS & Intake Operations)</option>
+              <option value={UserRole.ADMIN}>ADMIN (Full ERP Operational Access & Reports)</option>
+              <option value={UserRole.STAFF}>STAFF (POS Terminal & Intake Operations)</option>
+              <option value={UserRole.TECHNICIAN}>TECHNICIAN (Repair Workbench & Diagnostic Tasks)</option>
             </select>
           </div>
 
           <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-600 dark:text-amber-400 space-y-1">
-            <p className="font-semibold">Security Confirmation Notice:</p>
+            <p className="font-semibold">Role Authority Notice:</p>
             <p>
-              Changing role will reconfigure RLS policy permissions and database RPC access boundaries for this account.
+              Modifying a user's role reconfigures system access boundaries across POS, Repairs, Inventory, and Reports modules.
             </p>
           </div>
 
