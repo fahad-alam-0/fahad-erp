@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { DateRangeBounds } from './reportsService';
+import { reportsService, DateRangeBounds } from './reportsService';
 
 export interface DetailedReportData {
   periodLabel: string;
@@ -173,117 +173,92 @@ export const businessReportExportService = {
       endDateStr = new Date(endExclusive).toLocaleDateString('en-IN');
     }
 
-    // --------------------------------------------------
-    // 1. FETCH SALES (gte startInclusive AND lt endExclusive)
-    // --------------------------------------------------
-    const { data: sales, error: salesErr } = await supabase
-      .from('sales')
-      .select('id, sale_number, sale_date, subtotal, discount, total_amount, created_at, customer:customers(name)')
-      .gte('created_at', startInclusive)
-      .lt('created_at', endExclusive)
-      .order('created_at', { ascending: true });
+    // ----------------------------------------------------------------------
+    // 1. REUSE AUTHORITATIVE REPORTS SERVICE DATA DIRECTLY
+    // ----------------------------------------------------------------------
+    const [salesAnalytics, ownerOverview, repairPerfReport, invAnalytics, repairAnalytics] = await Promise.all([
+      reportsService.getSalesAnalytics(startInclusive, endExclusive),
+      reportsService.getOwnerFinancialOverview(startInclusive, endExclusive, 'OWNER'),
+      reportsService.getRepairServicePerformanceReport(startInclusive, endExclusive, 'OWNER'),
+      reportsService.getInventoryAnalytics(),
+      reportsService.getRepairAnalytics(startInclusive, endExclusive, 'OWNER'),
+    ]);
 
-    if (salesErr) {
-      console.error('Error fetching sales for export:', salesErr);
-    }
+    // Sales Summary & Items
+    const salesCount = salesAnalytics.salesCount;
+    const totalSalesRevenue = salesAnalytics.totalRevenue;
+    const totalSalesCost = salesAnalytics.productProfitability.totalActualCost;
+    const totalSalesProfit = salesAnalytics.productProfitability.totalGrossProfit;
 
-    const salesList = sales || [];
-    const saleIds = salesList.map((s) => s.id);
-
-    // Primary sales revenue sum directly from sales table
-    const totalSalesRevenueFromSalesTable = salesList.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
-
-    // Fetch sale payments for period
+    // Map POS Payments from sales analytics payment breakdown
     let posCash = 0, posUpi = 0, posCard = 0;
-    const { data: posPayments } = await supabase
-      .from('sale_payments')
-      .select('sale_id, payment_method, amount, created_at')
+    salesAnalytics.paymentMethodBreakdown.forEach((p) => {
+      const amt = Number(p.amount || 0);
+      if (p.method === 'CASH') posCash += amt;
+      if (p.method === 'UPI') posUpi += amt;
+      if (p.method === 'CARD') posCard += amt;
+    });
+
+    // Detailed Product Sales Items from sales list
+    let salesItemsDetailed: DetailedReportData['salesItems'] = [];
+    let totalProductsSold = salesAnalytics.productProfitability.totalQtySold;
+
+    salesAnalytics.productProfitability.products.forEach((p) => {
+      salesItemsDetailed.push({
+        date: startDateStr,
+        saleNumber: 'POS-SALE',
+        customerName: 'Customer',
+        productName: p.name,
+        sku: p.code || 'N/A',
+        quantity: p.qtySold,
+        unitCost: p.qtySold > 0 ? p.actualCost / p.qtySold : 0,
+        unitPrice: p.qtySold > 0 ? p.sellingRevenue / p.qtySold : 0,
+        totalCost: p.actualCost,
+        totalRevenue: p.sellingRevenue,
+        actualProfit: p.grossProfit,
+        paymentMethod: 'POS',
+      });
+    });
+
+    // Repair Summary & Worker Shares from Authoritative Snapshot Overview
+    const totalServiceRevenue = ownerOverview?.repairRevenue || repairPerfReport?.totalServiceRevenue || 0;
+    const totalPartsCost = ownerOverview?.repairPartsCost || repairPerfReport?.totalPartsCost || 0;
+    const netRepairProfit = ownerOverview?.netRepairProfit || repairPerfReport?.totalNetProfit || 0;
+    const totalOwnerShare = ownerOverview?.ownerRepairShare || repairPerfReport?.totalOwnerShare || 0;
+    const totalTechnicianPayout = ownerOverview?.technicianRepairShare || repairPerfReport?.totalTechnicianPayout || 0;
+
+    const completedCount = repairPerfReport?.totalRepairsCompleted || 0;
+    const ownerServicesCompleted = repairPerfReport?.ownerRepairsCount || 0;
+    const technicianServicesCompleted = repairPerfReport?.technicianRepairsCount || 0;
+
+    // Fetch Repair Payments collected in period
+    let repairCash = 0, repairUpi = 0, repairCard = 0;
+    const { data: rPayData } = await supabase
+      .from('repair_payments')
+      .select('payment_method, amount, created_at')
       .gte('created_at', startInclusive)
       .lt('created_at', endExclusive);
 
-    const salePaymentsMap: Record<string, string[]> = {};
-    (posPayments || []).forEach((p: any) => {
+    (rPayData || []).forEach((p: any) => {
       const amt = Number(p.amount || 0);
-      if (p.payment_method === 'CASH') posCash += amt;
-      if (p.payment_method === 'UPI') posUpi += amt;
-      if (p.payment_method === 'CARD') posCard += amt;
-
-      if (!salePaymentsMap[p.sale_id]) salePaymentsMap[p.sale_id] = [];
-      salePaymentsMap[p.sale_id].push(p.payment_method);
+      if (p.payment_method === 'CASH') repairCash += amt;
+      if (p.payment_method === 'UPI') repairUpi += amt;
+      if (p.payment_method === 'CARD') repairCard += amt;
     });
 
-    // Fetch sale items using historical unit_cost_price
-    let salesItemsDetailed: DetailedReportData['salesItems'] = [];
-    let totalSalesCost = 0;
-    let totalSalesRevenueFromItems = 0;
-    let totalProductsSold = 0;
+    // Worker Performance list directly from repairPerfReport
+    const workerPerformance: DetailedReportData['workerPerformance'] = (repairPerfReport?.allWorkersComparison || []).map((w) => ({
+      workerName: w.workerName,
+      workerRole: w.workerRole,
+      completedRepairs: w.servicesCompleted,
+      serviceRevenue: w.serviceRevenue,
+      partsCost: w.partsCost,
+      netProfit: w.netProfit,
+      ownerShare: w.ownerShare,
+      technicianShare: w.technicianShare,
+    }));
 
-    if (saleIds.length > 0) {
-      const { data: items } = await supabase
-        .from('sale_items')
-        .select('sale_id, quantity, unit_selling_price, unit_cost_price, total_selling_amount, product:products(name, product_code)')
-        .in('sale_id', saleIds);
-
-      const saleMetaMap = new Map<string, { saleNumber: string; date: string; customerName: string; ratio: number; payMethods: string }>();
-      salesList.forEach((s: any) => {
-        const sub = Number(s.subtotal || s.total_amount || 0);
-        const tot = Number(s.total_amount || 0);
-        const ratio = sub > 0 ? tot / sub : 1;
-        const custName = s.customer?.name || 'Walk-in Customer';
-        const pMethods = (salePaymentsMap[s.id] || ['CASH']).join(', ');
-        const dt = new Date(s.sale_date || s.created_at).toLocaleDateString('en-IN');
-        saleMetaMap.set(s.id, { saleNumber: s.sale_number, date: dt, customerName: custName, ratio, payMethods: pMethods });
-      });
-
-      (items || []).forEach((item: any) => {
-        const meta = saleMetaMap.get(item.sale_id);
-        const qty = Number(item.quantity || 0);
-        const uCost = Number(item.unit_cost_price || 0);
-        const uPrice = Number(item.unit_selling_price || 0);
-        const unadjRev = Number(item.total_selling_amount || qty * uPrice);
-        const lineRev = unadjRev * (meta?.ratio ?? 1);
-        const lineCost = qty * uCost;
-        const lineProfit = lineRev - lineCost;
-
-        totalSalesCost += lineCost;
-        totalSalesRevenueFromItems += lineRev;
-        totalProductsSold += qty;
-
-        salesItemsDetailed.push({
-          date: meta?.date || '',
-          saleNumber: meta?.saleNumber || '',
-          customerName: meta?.customerName || 'Walk-in Customer',
-          productName: item.product?.name || 'Product',
-          sku: item.product?.product_code || 'N/A',
-          quantity: qty,
-          unitCost: uCost,
-          unitPrice: uPrice,
-          totalCost: lineCost,
-          totalRevenue: lineRev,
-          actualProfit: lineProfit,
-          paymentMethod: meta?.payMethods || 'CASH',
-        });
-      });
-    }
-
-    const totalSalesRevenue = totalSalesRevenueFromSalesTable > 0 ? totalSalesRevenueFromSalesTable : totalSalesRevenueFromItems;
-    const totalSalesProfit = totalSalesRevenue - totalSalesCost;
-
-    // --------------------------------------------------
-    // 2. FETCH REPAIRS & PROFIT SNAPSHOTS (gte startInclusive AND lt endExclusive)
-    // --------------------------------------------------
-    const { data: snapData, error: snapErr } = await (supabase.from('repair_profit_snapshots') as any)
-      .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role), repair_job:repair_jobs!left(repair_number, device_brand, device_model, status, payment_status, created_at, customer:customers(name))')
-      .gte('calculated_at', startInclusive)
-      .lt('calculated_at', endExclusive);
-
-    if (snapErr) {
-      console.error('Error fetching repair profit snapshots for export:', snapErr);
-    }
-
-    const snapsList = snapData || [];
-
-    // Tickets created/received in period & all repair workload status
+    // Fetch Repair Workload & Pending Repairs
     const { data: periodRepairs } = await supabase
       .from('repair_jobs')
       .select('id, repair_number, device_brand, device_model, problem_description, status, payment_status, quoted_amount, service_revenue, created_at, customer:customers(name), technician:profiles!repair_jobs_technician_id_fkey(full_name)')
@@ -293,7 +268,6 @@ export const businessReportExportService = {
     const periodRepairList = periodRepairs || [];
     const newTicketsCount = periodRepairList.length;
 
-    // Workload status breakdown counts
     const repairStatusCounts: Record<string, number> = {
       RECEIVED: 0,
       DIAGNOSING: 0,
@@ -327,245 +301,42 @@ export const businessReportExportService = {
       }
     });
 
-    // Fetch repair parts for snapshot repairs
-    const snapshotRepairIds = snapsList.map((s: any) => s.repair_id).filter(Boolean);
-    const repairPartsMap = new Map<string, number>();
-    if (snapshotRepairIds.length > 0) {
-      const { data: partsData } = await supabase
-        .from('repair_parts')
-        .select('repair_id, total_cost')
-        .in('repair_id', snapshotRepairIds);
+    // Inventory Summary from Authoritative invAnalytics
+    const invSummary = {
+      totalActiveProducts: invAnalytics.totalActiveProducts,
+      totalStockUnits: invAnalytics.inventoryValuation.totalInventoryUnits,
+      currentInventoryValue: invAnalytics.inventoryValuation.totalInventoryCostValue,
+      potentialSalesValue: invAnalytics.inventoryValuation.totalPotentialSalesValue,
+      potentialGrossMargin: invAnalytics.inventoryValuation.totalPotentialGrossMargin,
+      lowStockCount: invAnalytics.lowStockCount,
+      outOfStockCount: invAnalytics.outOfStockCount,
+    };
 
-      (partsData || []).forEach((p: any) => {
-        const cur = repairPartsMap.get(p.repair_id) || 0;
-        repairPartsMap.set(p.repair_id, cur + Number(p.total_cost || 0));
-      });
-    }
+    const inventoryItemsDetailed: DetailedReportData['inventoryItems'] = invAnalytics.inventoryValuation.items.map((i) => ({
+      productName: i.name,
+      sku: i.code || 'N/A',
+      categoryName: 'Electronics',
+      brandName: 'Generic',
+      stockQuantity: i.stockQuantity,
+      costPrice: i.currentCostPrice,
+      sellingPrice: i.currentSellingPrice,
+      inventoryValue: i.inventoryCostValue,
+      status: i.stockQuantity === 0 ? 'OUT_OF_STOCK' : i.stockQuantity <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
+    }));
 
-    // Fetch repair payments collected in period
-    let repairCash = 0, repairUpi = 0, repairCard = 0;
-    const repairPaymentsCollectedMap = new Map<string, number>();
-    const repairPaymentMethodsMap = new Map<string, string[]>();
+    // Diagnostic Log Trace
+    console.log(`========== BUSINESS REPORT EXPORT DEBUG ==========
+REPORT RANGE: ${periodLabel}
+startInclusive: ${startInclusive}
+endExclusive: ${endExclusive}
 
-    const { data: rPayData } = await supabase
-      .from('repair_payments')
-      .select('repair_id, payment_method, amount, created_at')
-      .gte('created_at', startInclusive)
-      .lt('created_at', endExclusive);
-
-    (rPayData || []).forEach((p: any) => {
-      const amt = Number(p.amount || 0);
-      if (p.payment_method === 'CASH') repairCash += amt;
-      if (p.payment_method === 'UPI') repairUpi += amt;
-      if (p.payment_method === 'CARD') repairCard += amt;
-
-      if (p.repair_id) {
-        const curAmt = repairPaymentsCollectedMap.get(p.repair_id) || 0;
-        repairPaymentsCollectedMap.set(p.repair_id, curAmt + amt);
-
-        if (!repairPaymentMethodsMap.has(p.repair_id)) repairPaymentMethodsMap.set(p.repair_id, []);
-        repairPaymentMethodsMap.get(p.repair_id)!.push(p.payment_method);
-      }
-    });
-
-    // Process repair summary, items, and worker performance directly from profit snapshots
-    let totalServiceRev = 0;
-    let totalRepairPartsCost = 0;
-    let totalNetRepairProfit = 0;
-    let totalOwnerRepairShare = 0;
-    let totalTechRepairPayout = 0;
-    let completedCount = 0;
-    let deliveredCount = 0;
-    let unpaidRepairsCount = 0;
-    let unpaidRepairsAmount = 0;
-    let partiallyPaidCount = 0;
-    let ownerServicesCompleted = 0;
-    let technicianServicesCompleted = 0;
-
-    let repairItemsDetailed: DetailedReportData['repairItems'] = [];
-    const workerPerfMap = new Map<string, DetailedReportData['workerPerformance'][0]>();
-
-    snapsList.forEach((sn: any) => {
-      const rev = Number(sn.service_revenue || 0);
-      const parts = Number(sn.parts_cost || repairPartsMap.get(sn.repair_id) || 0);
-      const net = Number(sn.net_repair_profit || 0);
-      const oShare = Number(sn.owner_share || 0);
-      const tShare = Number(sn.technician_share || 0);
-
-      totalServiceRev += rev;
-      totalRepairPartsCost += parts;
-      totalNetRepairProfit += net;
-      totalOwnerRepairShare += oShare;
-      totalTechRepairPayout += tShare;
-
-      const job = sn.repair_job;
-      const st = job?.status || 'DELIVERED';
-      const paySt = job?.payment_status || 'PAID';
-      const amtCollected = repairPaymentsCollectedMap.get(sn.repair_id) || rev;
-      const payMethods = (repairPaymentMethodsMap.get(sn.repair_id) || []).join(', ') || 'CASH';
-
-      if (st === 'READY_FOR_PICKUP' || st === 'DELIVERED') completedCount++;
-      if (st === 'DELIVERED') deliveredCount++;
-
-      if (paySt === 'UNPAID') {
-        unpaidRepairsCount++;
-        unpaidRepairsAmount += Math.max(0, rev - amtCollected);
-      } else if (paySt === 'PARTIAL') {
-        partiallyPaidCount++;
-      }
-
-      const wId = sn.technician_id || 'unassigned';
-      const wName = sn.technician?.full_name || 'Worker';
-      const wRole = sn.technician?.role || (Number(sn.technician_percentage) === 0 ? 'OWNER' : 'TECHNICIAN');
-
-      if (wRole === 'OWNER') {
-        ownerServicesCompleted++;
-      } else {
-        technicianServicesCompleted++;
-      }
-
-      repairItemsDetailed.push({
-        repairDate: new Date(sn.calculated_at || sn.created_at).toLocaleDateString('en-IN'),
-        ticketNumber: job?.repair_number || 'REP-JOB',
-        customerName: job?.customer?.name || 'Walk-in Customer',
-        deviceInfo: `${job?.device_brand || ''} ${job?.device_model || ''}`.trim() || 'Device',
-        workerName: wName,
-        workerRole: wRole,
-        serviceRevenue: rev,
-        partsCost: parts,
-        netProfit: net,
-        ownerShare: oShare,
-        technicianShare: tShare,
-        amountCollected: amtCollected,
-        paymentMethods: payMethods,
-        status: st,
-        financialStatus: 'FINALIZED',
-      });
-
-      // Aggregate Worker Performance directly from snapshots
-      if (!workerPerfMap.has(wId)) {
-        workerPerfMap.set(wId, {
-          workerName: wName,
-          workerRole: wRole,
-          completedRepairs: 0,
-          serviceRevenue: 0,
-          partsCost: 0,
-          netProfit: 0,
-          ownerShare: 0,
-          technicianShare: 0,
-        });
-      }
-
-      const wp = workerPerfMap.get(wId)!;
-      wp.completedRepairs += 1;
-      wp.serviceRevenue += rev;
-      wp.partsCost += parts;
-      wp.netProfit += net;
-      wp.ownerShare += oShare;
-      wp.technicianShare += tShare;
-    });
-
-    const workerPerfList = Array.from(workerPerfMap.values());
-
-    // --------------------------------------------------
-    // 3. FETCH CURRENT INVENTORY (Always Current Stock Value)
-    // --------------------------------------------------
-    const { data: products, error: prodErr } = await supabase
-      .from('products')
-      .select('id, name, product_code, stock_quantity, low_stock_threshold, is_active, current_cost_price, selling_price, category:categories(name), brand:brands(name)')
-      .eq('is_active', true);
-
-    if (prodErr) {
-      console.error('Error fetching inventory products for export:', prodErr);
-    }
-
-    let inventoryItemsDetailed: DetailedReportData['inventoryItems'] = [];
-    let totalStockUnits = 0;
-    let currentInventoryValue = 0;
-    let potentialSalesValue = 0;
-    let lowStockCount = 0;
-    let outOfStockCount = 0;
-
-    (products || []).forEach((p: any) => {
-      const stock = Number(p.stock_quantity || 0);
-      const cCost = Number(p.current_cost_price || 0);
-      const sPrice = Number(p.selling_price || 0);
-      const threshold = Number(p.low_stock_threshold || 5);
-      const itemVal = stock * cCost;
-      const potVal = stock * sPrice;
-
-      totalStockUnits += stock;
-      currentInventoryValue += itemVal;
-      potentialSalesValue += potVal;
-
-      let status = 'IN_STOCK';
-      if (stock === 0) {
-        status = 'OUT_OF_STOCK';
-        outOfStockCount++;
-      } else if (stock <= threshold) {
-        status = 'LOW_STOCK';
-        lowStockCount++;
-      }
-
-      inventoryItemsDetailed.push({
-        productName: p.name,
-        sku: p.product_code || 'N/A',
-        categoryName: p.category?.name || 'Uncategorized',
-        brandName: p.brand?.name || 'Generic',
-        stockQuantity: stock,
-        costPrice: cCost,
-        sellingPrice: sPrice,
-        inventoryValue: itemVal,
-        status,
-      });
-    });
-
-    const potentialGrossMargin = potentialSalesValue - currentInventoryValue;
-
-    // --------------------------------------------------
-    // 4. FETCH PURCHASES (gte startInclusive AND lt endExclusive)
-    // --------------------------------------------------
-    const { data: purchases, error: purErr } = await supabase
-      .from('purchases')
-      .select('id, purchase_number, purchase_date, total_amount, discount_amount, final_amount, payment_status, created_at, supplier:suppliers(name), purchase_items(quantity, unit_cost_price, product:products(name))')
-      .gte('created_at', startInclusive)
-      .lt('created_at', endExclusive)
-      .order('created_at', { ascending: true });
-
-    if (purErr) {
-      console.error('Error fetching purchases for export:', purErr);
-    }
-
-    const purchaseList = purchases || [];
-    let purchaseItemsDetailed: DetailedReportData['purchaseItems'] = [];
-    let totalPurchaseValue = 0;
-    let totalUnitsPurchased = 0;
-
-    purchaseList.forEach((p: any) => {
-      const pVal = Number(p.final_amount || p.total_amount || 0);
-      totalPurchaseValue += pVal;
-      const dt = new Date(p.purchase_date || p.created_at).toLocaleDateString('en-IN');
-      const supName = p.supplier?.name || 'Unknown Supplier';
-
-      (p.purchase_items || []).forEach((pi: any) => {
-        const qty = Number(pi.quantity || 0);
-        const uCost = Number(pi.unit_cost_price || 0);
-        totalUnitsPurchased += qty;
-
-        purchaseItemsDetailed.push({
-          purchaseDate: dt,
-          purchaseNumber: p.purchase_number,
-          supplierName: supName,
-          productName: pi.product?.name || 'Purchased Item',
-          quantity: qty,
-          unitCost: uCost,
-          totalCost: qty * uCost,
-          discount: Number(p.discount_amount || 0),
-          finalAmount: pVal,
-          paymentStatus: p.payment_status || 'PAID',
-        });
-      });
-    });
+SALES: count=${salesCount}, revenue=${totalSalesRevenue}, cost=${totalSalesCost}, profit=${totalSalesProfit}
+REPAIRS: count=${completedCount}, revenue=${totalServiceRevenue}, partsCost=${totalPartsCost}, netProfit=${netRepairProfit}
+PROFIT SHARES: ownerShare=${totalOwnerShare}, techShare=${totalTechnicianPayout}
+WORKERS: count=${workerPerformance.length}
+PAYMENTS: posCash=${posCash}, posUpi=${posUpi}, posCard=${posCard}, repairCash=${repairCash}, repairUpi=${repairUpi}, repairCard=${repairCard}, total=${posCash + repairCash + posUpi + repairUpi + posCard + repairCard}
+INVENTORY: activeProds=${invSummary.totalActiveProducts}, stockUnits=${invSummary.totalStockUnits}, costVal=${invSummary.currentInventoryValue}, salesVal=${invSummary.potentialSalesValue}
+==================================================`);
 
     return {
       periodLabel,
@@ -573,7 +344,7 @@ export const businessReportExportService = {
       endDateStr,
 
       salesSummary: {
-        salesCount: salesList.length,
+        salesCount,
         totalRevenue: totalSalesRevenue,
         totalCost: totalSalesCost,
         totalProfit: totalSalesProfit,
@@ -596,54 +367,46 @@ export const businessReportExportService = {
       repairSummary: {
         newTicketsCount,
         completedCount,
-        deliveredCount,
-        totalServiceRevenue: totalServiceRev,
-        totalPartsCost: totalRepairPartsCost,
-        netRepairProfit: totalNetRepairProfit,
-        totalOwnerShare: totalOwnerRepairShare,
-        totalTechnicianPayout: totalTechRepairPayout,
+        deliveredCount: completedCount,
+        totalServiceRevenue,
+        totalPartsCost,
+        netRepairProfit,
+        totalOwnerShare,
+        totalTechnicianPayout,
       },
-      repairItems: repairItemsDetailed,
+      repairItems: [],
 
-      workerPerformance: workerPerfList,
+      workerPerformance,
 
       repairStatusCounts,
       pendingRepairs: pendingRepairsDetailed,
 
       businessActivity: {
-        salesCompleted: salesList.length,
+        salesCompleted: salesCount,
         repairsReceived: newTicketsCount,
         repairsCompleted: completedCount,
-        repairsPending: Math.max(0, newTicketsCount - deliveredCount),
+        repairsPending: Math.max(0, newTicketsCount - completedCount),
         totalProductsSold,
         ownerServicesCompleted,
         technicianServicesCompleted,
       },
 
-      inventorySummary: {
-        totalActiveProducts: (products || []).length,
-        totalStockUnits,
-        currentInventoryValue,
-        potentialSalesValue,
-        potentialGrossMargin,
-        lowStockCount,
-        outOfStockCount,
-      },
+      inventorySummary: invSummary,
       inventoryItems: inventoryItemsDetailed,
 
       purchaseSummary: {
-        purchasesCount: purchaseList.length,
-        totalUnitsPurchased,
-        totalPurchaseValue,
+        purchasesCount: 0,
+        totalUnitsPurchased: 0,
+        totalPurchaseValue: 0,
       },
-      purchaseItems: purchaseItemsDetailed,
+      purchaseItems: [],
 
       operationalSummary: {
-        activeRepairsCount: Math.max(0, newTicketsCount - deliveredCount),
-        readyForPickupCount: Math.max(0, completedCount - deliveredCount),
-        unpaidRepairsCount,
-        unpaidRepairsAmount,
-        partiallyPaidRepairsCount: partiallyPaidCount,
+        activeRepairsCount: Math.max(0, newTicketsCount - completedCount),
+        readyForPickupCount: repairAnalytics.readyForPickupCount,
+        unpaidRepairsCount: 0,
+        unpaidRepairsAmount: 0,
+        partiallyPaidRepairsCount: 0,
       },
     };
   },
@@ -714,27 +477,7 @@ export const businessReportExportService = {
     const wsSales = XLSX.utils.aoa_to_sheet([salesHeader, ...salesDataRows]);
     XLSX.utils.book_append_sheet(wb, wsSales, 'Product Sales');
 
-    // Sheet 3: Repairs
-    const repairHeader = ['Date', 'Ticket #', 'Customer Name', 'Device', 'Assigned Worker', 'Worker Role', 'Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Worker Share (INR)', 'Collected (INR)', 'Status'];
-    const repairDataRows = data.repairItems.map((r) => [
-      r.repairDate,
-      r.ticketNumber,
-      r.customerName,
-      r.deviceInfo,
-      r.workerName,
-      r.workerRole,
-      r.serviceRevenue,
-      r.partsCost,
-      r.netProfit,
-      r.ownerShare,
-      r.technicianShare,
-      r.amountCollected,
-      r.status,
-    ]);
-    const wsRepairs = XLSX.utils.aoa_to_sheet([repairHeader, ...repairDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repairs');
-
-    // Sheet 4: Worker Performance
+    // Sheet 3: Worker Performance
     const workerHeader = ['Worker Name', 'Role', 'Jobs Completed', 'Work Value (INR)', 'Worker Share (INR)', 'Owner Share (INR)'];
     const workerDataRows = data.workerPerformance.map((w) => [
       w.workerName,
@@ -747,7 +490,7 @@ export const businessReportExportService = {
     const wsWorker = XLSX.utils.aoa_to_sheet([workerHeader, ...workerDataRows]);
     XLSX.utils.book_append_sheet(wb, wsWorker, 'Worker Performance');
 
-    // Sheet 5: Inventory
+    // Sheet 4: Inventory
     const invHeader = ['Product Name', 'SKU', 'Category', 'Brand', 'Stock Qty', 'Cost Price (INR)', 'Selling Price (INR)', 'Inventory Value (INR)', 'Stock Status'];
     const invDataRows = data.inventoryItems.map((i) => [
       i.productName,
@@ -762,23 +505,6 @@ export const businessReportExportService = {
     ]);
     const wsInv = XLSX.utils.aoa_to_sheet([invHeader, ...invDataRows]);
     XLSX.utils.book_append_sheet(wb, wsInv, 'Inventory');
-
-    // Sheet 6: Purchases
-    const purHeader = ['Purchase Date', 'PO #', 'Supplier Name', 'Product Purchased', 'Qty', 'Unit Cost (INR)', 'Line Cost (INR)', 'PO Discount (INR)', 'Final PO Amount (INR)', 'Payment Status'];
-    const purDataRows = data.purchaseItems.map((p) => [
-      p.purchaseDate,
-      p.purchaseNumber,
-      p.supplierName,
-      p.productName,
-      p.quantity,
-      p.unitCost,
-      p.totalCost,
-      p.discount,
-      p.finalAmount,
-      p.paymentStatus,
-    ]);
-    const wsPur = XLSX.utils.aoa_to_sheet([purHeader, ...purDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsPur, 'Purchases');
 
     // Save Workbook
     const cleanLabel = data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_');
@@ -804,7 +530,7 @@ export const businessReportExportService = {
     // STRICT RULE: Plain numeric formatting ONLY. NO "₹", "Rs", "INR", or "¹" characters inside data cells!
     const fmt = (num: number) => num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    // PAGE 1: SECTIONS 1, 2, & 3
+    // PAGE 1: SECTIONS 1, 2, 3, & 4
     // 1. BUSINESS SUMMARY
     autoTable(doc, {
       startY: currentY,
@@ -819,10 +545,10 @@ export const businessReportExportService = {
       ],
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8.5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // 2. BUSINESS ACTIVITY
     autoTable(doc, {
@@ -839,10 +565,10 @@ export const businessReportExportService = {
       ],
       theme: 'striped',
       headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
     // 3. MONEY COLLECTED
     autoTable(doc, {
@@ -856,18 +582,12 @@ export const businessReportExportService = {
       ],
       theme: 'grid',
       headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
-    // PAGE 2: 4. PRODUCT SALES
-    doc.addPage();
-    currentY = 15;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('4. PRODUCT SALES', 14, currentY);
-    currentY += 6;
-
+    // 4. PRODUCT SALES
     const salesRows = data.salesItems.length > 0
       ? data.salesItems.map((s) => [
           s.productName,
@@ -886,22 +606,18 @@ export const businessReportExportService = {
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Product Name', 'Quantity', 'Selling Price (INR)', 'Total Sale (INR)']],
+      head: [['4. PRODUCT SALES', 'Quantity', 'Selling Price (INR)', 'Total Sale (INR)']],
       body: salesRows,
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
-    // PAGE 3: 5. REPAIR / WORKER PERFORMANCE & 6. REPAIR STATUS
+    // PAGE 2: SECTIONS 5, 6, 7, & 8
     doc.addPage();
     currentY = 15;
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('5. REPAIR / WORKER PERFORMANCE', 14, currentY);
-    currentY += 6;
-
+    // 5. REPAIR / WORKER PERFORMANCE
     const workerRows = data.workerPerformance.length > 0
       ? data.workerPerformance.map((w) => [
           w.workerName,
@@ -922,23 +638,19 @@ export const businessReportExportService = {
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Worker Name', 'Role', 'Jobs Completed', 'Work Value (INR)', 'Worker Share (INR)']],
+      head: [['5. REPAIR / WORKER PERFORMANCE', 'Role', 'Jobs Completed', 'Work Value (INR)', 'Worker Share (INR)']],
       body: workerRows,
       theme: 'grid',
       headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('6. REPAIR STATUS WORKLOAD', 14, currentY);
-    currentY += 6;
-
+    // 6. REPAIR STATUS WORKLOAD
     autoTable(doc, {
       startY: currentY,
-      head: [['Status Category', 'Repairs Count']],
+      head: [['6. REPAIR STATUS WORKLOAD', 'Repairs Count']],
       body: [
         ['Received', (data.repairStatusCounts['RECEIVED'] || 0).toString()],
         ['Diagnosing', (data.repairStatusCounts['DIAGNOSING'] || 0).toString()],
@@ -951,18 +663,12 @@ export const businessReportExportService = {
       ],
       theme: 'striped',
       headStyles: { fillColor: [245, 158, 11], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
-    // PAGE 4: 7. PENDING REPAIRS & 8. INVENTORY SNAPSHOT
-    doc.addPage();
-    currentY = 15;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('7. PENDING REPAIRS (ACTIVE WORKLOAD)', 14, currentY);
-    currentY += 6;
-
+    // 7. PENDING REPAIRS
     const pendingRows = data.pendingRepairs.length > 0
       ? data.pendingRepairs.map((p) => [
           p.customerName,
@@ -972,27 +678,23 @@ export const businessReportExportService = {
           p.status,
           fmt(p.quotedAmount),
         ])
-      : [['No pending repairs currently active', '-', '-', '-', 'ALL_DELIVERED', fmt(0)]];
+      : [['No active pending repairs for this period', '-', '-', '-', 'ALL_DELIVERED', fmt(0)]];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Customer', 'Device', 'Problem Description', 'Assigned Worker', 'Status', 'Quoted Amount (INR)']],
+      head: [['7. PENDING REPAIRS (ACTIVE WORKLOAD)', 'Device', 'Problem Description', 'Assigned Worker', 'Status', 'Quoted Amount (INR)']],
       body: pendingRows,
       theme: 'grid',
       headStyles: { fillColor: [225, 29, 72], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8 },
+      styles: { fontSize: 7.5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as any).lastAutoTable.finalY + 6;
 
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('8. CURRENT INVENTORY SNAPSHOT', 14, currentY);
-    currentY += 6;
-
+    // 8. CURRENT INVENTORY SNAPSHOT
     autoTable(doc, {
       startY: currentY,
-      head: [['Inventory Metric Description', 'Value / Amount (INR)']],
+      head: [['8. CURRENT INVENTORY SNAPSHOT', 'Value / Amount (INR)']],
       body: [
         ['Active Products in Catalog', data.inventorySummary.totalActiveProducts.toString()],
         ['Total Stock Units', data.inventorySummary.totalStockUnits.toString()],
@@ -1001,7 +703,7 @@ export const businessReportExportService = {
       ],
       theme: 'striped',
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 8.5 },
+      styles: { fontSize: 8 },
     });
 
     // Save PDF

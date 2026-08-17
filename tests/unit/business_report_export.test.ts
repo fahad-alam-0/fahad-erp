@@ -117,7 +117,8 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
       if (table === 'sale_payments') {
         const lt = vi.fn().mockResolvedValue({ data: mockSalePayments, error: null });
         const gte = vi.fn().mockReturnValue({ lt });
-        return { select: vi.fn().mockReturnValue({ gte }) } as any;
+        const inFn = vi.fn().mockResolvedValue({ data: mockSalePayments, error: null });
+        return { select: vi.fn().mockReturnValue({ gte, in: inFn }) } as any;
       }
       if (table === 'repair_jobs') {
         const lt = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
@@ -142,6 +143,9 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
       }
       if (table === 'products') {
         return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: mockProducts, error: null }) }) } as any;
+      }
+      if (table === 'inventory_movements') {
+        return { select: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue({ data: [], error: null }) }) } as any;
       }
       if (table === 'purchases') {
         const order = vi.fn().mockResolvedValue({ data: mockPurchases, error: null });
