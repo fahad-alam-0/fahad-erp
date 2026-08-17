@@ -64,21 +64,24 @@ export const getAsiaKolkataDateBounds = (key: DateRangeKey, customStart?: string
     displayEnd = displayStart;
     label = `Yesterday — ${displayStart}`;
   } else if (key === 'LAST_7_DAYS') {
-    startIso = getISTMidnightISO(year, month, day - 7);
+    // 7 calendar dates inclusive of today: (day - 6) through day (e.g. Aug 11 to Aug 17)
+    startIso = getISTMidnightISO(year, month, day - 6);
     endIso = getISTMidnightISO(year, month, day + 1);
-    displayStart = formatDateHumanIST(year, month, day - 7);
+    displayStart = formatDateHumanIST(year, month, day - 6);
     displayEnd = formatDateHumanIST(year, month, day);
     label = `Last 7 Days (${displayStart} — ${displayEnd})`;
   } else if (key === 'LAST_10_DAYS') {
-    startIso = getISTMidnightISO(year, month, day - 10);
+    // 10 calendar dates inclusive of today: (day - 9) through day (e.g. Aug 8 to Aug 17)
+    startIso = getISTMidnightISO(year, month, day - 9);
     endIso = getISTMidnightISO(year, month, day + 1);
-    displayStart = formatDateHumanIST(year, month, day - 10);
+    displayStart = formatDateHumanIST(year, month, day - 9);
     displayEnd = formatDateHumanIST(year, month, day);
     label = `Last 10 Days (${displayStart} — ${displayEnd})`;
   } else if (key === 'LAST_30_DAYS') {
-    startIso = getISTMidnightISO(year, month, day - 30);
+    // 30 calendar dates inclusive of today: (day - 29) through day
+    startIso = getISTMidnightISO(year, month, day - 29);
     endIso = getISTMidnightISO(year, month, day + 1);
-    displayStart = formatDateHumanIST(year, month, day - 30);
+    displayStart = formatDateHumanIST(year, month, day - 29);
     displayEnd = formatDateHumanIST(year, month, day);
     label = `Last 30 Days (${displayStart} — ${displayEnd})`;
   } else if (key === 'THIS_MONTH') {

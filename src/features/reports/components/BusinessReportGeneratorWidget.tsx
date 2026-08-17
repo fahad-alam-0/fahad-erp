@@ -24,6 +24,12 @@ interface BusinessReportGeneratorWidgetProps {
 
 export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidgetProps> = ({ userRole = 'OWNER', selectedRange }) => {
   const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>(selectedRange || 'THIS_MONTH');
+
+  React.useEffect(() => {
+    if (selectedRange) {
+      setDateRangeKey(selectedRange);
+    }
+  }, [selectedRange]);
   const [customStartDate, setCustomStartDate] = useState<string>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
   );

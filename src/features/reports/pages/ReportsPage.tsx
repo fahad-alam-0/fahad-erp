@@ -158,7 +158,7 @@ export const ReportsPage: React.FC = () => {
 
       {/* Prominent Business Report Generator Widget (Owner Only) */}
       {isOwner && (
-        <BusinessReportGeneratorWidget userRole={userRole} />
+        <BusinessReportGeneratorWidget userRole={userRole} selectedRange={dateRange} />
       )}
 
       {/* Report Category Tabs */}
@@ -280,7 +280,7 @@ export const ReportsPage: React.FC = () => {
 
           {activeTab === 'export' && isOwner && (
             <div className="space-y-6">
-              <BusinessReportGeneratorWidget userRole={userRole} />
+              <BusinessReportGeneratorWidget userRole={userRole} selectedRange={dateRange} />
             </div>
           )}
 
