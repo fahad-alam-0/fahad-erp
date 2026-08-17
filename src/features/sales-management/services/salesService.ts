@@ -7,16 +7,11 @@ export const salesService = {
   async getSales(params?: { search?: string; customerId?: string }): Promise<Sale[]> {
     let req = supabase
       .from('sales')
-      .select('*, customer:customers(full_name, phone)')
+      .select('*, customer:customers(full_name, phone), sale_items(*, product:products(name, product_code, unit))')
       .order('created_at', { ascending: false });
 
     if (params?.customerId && params.customerId !== 'ALL') {
       req = req.eq('customer_id', params.customerId);
-    }
-
-    if (params?.search && params.search.trim().length > 0) {
-      const q = params.search.trim();
-      req = req.or(`sale_number.ilike.%${q}%`);
     }
 
     const { data, error } = await req;
@@ -25,12 +20,34 @@ export const salesService = {
       throw new Error(error.message || 'Failed to fetch sales log.');
     }
 
-    return (data || []).map((s: any) => ({
+    let sales = (data || []).map((s: any) => ({
       ...s,
       subtotal: Number(s.subtotal || 0),
       discount: Number(s.discount || 0),
       total_amount: Number(s.total_amount || 0),
+      sale_items: (s.sale_items || []).map((item: any) => ({
+        ...item,
+        quantity: Number(item.quantity || 0),
+        unit_selling_price: Number(item.unit_selling_price || 0),
+        unit_cost_price: Number(item.unit_cost_price || 0),
+        total_selling_amount: Number(item.total_selling_amount || 0),
+        total_cost_amount: Number(item.total_cost_amount || 0),
+      })),
     }));
+
+    if (params?.search && params.search.trim().length > 0) {
+      const q = params.search.trim().toLowerCase();
+      sales = sales.filter((s: Sale) => {
+        const matchInvoice = s.sale_number?.toLowerCase().includes(q);
+        const matchCustomer = s.customer?.full_name?.toLowerCase().includes(q);
+        const matchProduct = (s.sale_items || []).some(
+          (item) => item.product?.name?.toLowerCase().includes(q) || item.product?.product_code?.toLowerCase().includes(q)
+        );
+        return matchInvoice || matchCustomer || matchProduct;
+      });
+    }
+
+    return sales;
   },
 
   async getSaleById(id: string): Promise<Sale | null> {

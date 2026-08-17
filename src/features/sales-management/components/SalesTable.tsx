@@ -3,7 +3,7 @@ import { Sale } from '../types/sales.types';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { formatCurrency } from '@/lib/utils';
-import { Eye, ShoppingCart, Calendar, User } from 'lucide-react';
+import { Eye, ShoppingCart, Calendar, User, Package } from 'lucide-react';
 
 interface SalesTableProps {
   sales: Sale[];
@@ -18,7 +18,7 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onViewDetails }) 
         <table className="w-full text-left text-xs">
           <thead className="bg-muted/40 text-muted-foreground text-[10px] uppercase font-semibold border-b border-border">
             <tr>
-              <th className="p-3">Sale #</th>
+              <th className="p-3">Product</th>
               <th className="p-3">Customer</th>
               <th className="p-3">Date & Time</th>
               <th className="p-3 text-right">Subtotal</th>
@@ -31,10 +31,29 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onViewDetails }) 
           <tbody className="divide-y divide-border">
             {sales.map((sale) => (
               <tr key={sale.id} className="hover:bg-muted/30 transition-colors">
-                <td className="p-3 font-mono font-semibold text-primary">{sale.sale_number}</td>
+                {/* Column 1: PRODUCT (Item name and quantity) */}
+                <td className="p-3">
+                  {sale.sale_items && sale.sale_items.length > 0 ? (
+                    <div className="space-y-1">
+                      {sale.sale_items.map((item, idx) => (
+                        <div key={item.id || idx} className="font-semibold text-foreground text-xs leading-tight flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>{item.product?.name || 'Product'}</span>
+                          <span className="text-primary font-mono font-bold text-[11px]">× {item.quantity}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground italic text-xs">No item details</span>
+                  )}
+                </td>
+
+                {/* Column 2: CUSTOMER */}
                 <td className="p-3 font-medium text-foreground">
                   {sale.customer?.full_name || 'Walk-in Customer'}
                 </td>
+
+                {/* Column 3: DATE & TIME */}
                 <td className="p-3 text-muted-foreground font-mono text-[11px]">
                   {new Date(sale.sale_date || sale.created_at).toLocaleString('en-IN', {
                     month: 'short',
@@ -43,18 +62,28 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onViewDetails }) 
                     minute: '2-digit',
                   })}
                 </td>
+
+                {/* Column 4: SUBTOTAL */}
                 <td className="p-3 text-right font-mono text-muted-foreground">
                   {formatCurrency(sale.subtotal, 'INR')}
                 </td>
+
+                {/* Column 5: DISCOUNT */}
                 <td className="p-3 text-right font-mono text-muted-foreground">
                   {sale.discount > 0 ? formatCurrency(sale.discount, 'INR') : '—'}
                 </td>
+
+                {/* Column 6: TOTAL AMOUNT */}
                 <td className="p-3 text-right font-mono font-bold text-foreground">
                   {formatCurrency(sale.total_amount, 'INR')}
                 </td>
+
+                {/* Column 7: PAYMENT STATUS */}
                 <td className="p-3">
                   <StatusBadge status={sale.payment_status || 'PAID'} />
                 </td>
+
+                {/* Column 8: ACTIONS */}
                 <td className="p-3 text-right">
                   <Button
                     variant="outline"
@@ -82,8 +111,18 @@ export const SalesTable: React.FC<SalesTableProps> = ({ sales, onViewDetails }) 
                   <ShoppingCart className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="font-mono font-bold text-xs text-primary">{sale.sale_number}</h4>
-                  <p className="text-xs font-semibold text-foreground flex items-center gap-1">
+                  {sale.sale_items && sale.sale_items.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {sale.sale_items.map((item, idx) => (
+                        <p key={item.id || idx} className="font-bold text-xs text-foreground">
+                          {item.product?.name || 'Product'} <span className="text-primary font-mono">× {item.quantity}</span>
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-mono font-bold text-xs text-primary">{sale.sale_number}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <User className="w-3 h-3 text-muted-foreground/70" />
                     <span>{sale.customer?.full_name || 'Walk-in Customer'}</span>
                   </p>

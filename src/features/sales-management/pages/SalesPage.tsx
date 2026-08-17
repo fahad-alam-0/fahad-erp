@@ -176,7 +176,7 @@ export const SalesPage: React.FC = () => {
               <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search by sale invoice number (e.g. SAL-2026...)..."
+                placeholder="Search by product, customer, or invoice number..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full text-xs pl-9 pr-8 py-2 bg-background border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring text-foreground placeholder:text-muted-foreground"
@@ -228,11 +228,11 @@ export const SalesPage: React.FC = () => {
                 <ShoppingCart className="w-8 h-8" />
               </div>
               <h3 className="text-sm font-bold text-foreground">
-                {searchQuery ? 'No matching sales invoices found' : 'No sales recorded yet'}
+                {searchQuery ? 'No matching sales records found' : 'No sales recorded yet'}
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm">
                 {searchQuery
-                  ? `No invoice records matched "${searchQuery}". Try searching by invoice number.`
+                  ? `No sales records matched "${searchQuery}". Try searching by product name, customer, or invoice number.`
                   : 'Open the POS Terminal to start processing retail customer checkouts.'}
               </p>
               {!searchQuery && (
