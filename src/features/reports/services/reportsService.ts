@@ -15,7 +15,7 @@ import {
 } from '../types/reports.types';
 
 export const reportsService = {
-  getDateRangeBounds(key: DateRangeKey): { startDate: string; endDate: string; label: string } {
+  getDateRangeBounds(key: DateRangeKey, customStart?: string, customEnd?: string): { startDate: string; endDate: string; label: string } {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -27,6 +27,17 @@ export const reportsService = {
       };
     }
 
+    if (key === 'YESTERDAY') {
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yStr = y.toISOString().split('T')[0];
+      return {
+        startDate: `${yStr}T00:00:00.000Z`,
+        endDate: `${yStr}T23:59:59.999Z`,
+        label: 'Yesterday',
+      };
+    }
+
     if (key === 'LAST_7_DAYS') {
       const d = new Date();
       d.setDate(d.getDate() - 7);
@@ -34,6 +45,16 @@ export const reportsService = {
         startDate: d.toISOString(),
         endDate: now.toISOString(),
         label: 'Last 7 Days',
+      };
+    }
+
+    if (key === 'LAST_10_DAYS') {
+      const d = new Date();
+      d.setDate(d.getDate() - 10);
+      return {
+        startDate: d.toISOString(),
+        endDate: now.toISOString(),
+        label: 'Last 10 Days',
       };
     }
 
@@ -54,6 +75,14 @@ export const reportsService = {
         startDate: startLastMonth.toISOString(),
         endDate: endLastMonth.toISOString(),
         label: 'Last Month',
+      };
+    }
+
+    if (key === 'CUSTOM' && customStart && customEnd) {
+      return {
+        startDate: `${customStart}T00:00:00.000Z`,
+        endDate: `${customEnd}T23:59:59.999Z`,
+        label: `${customStart} to ${customEnd}`,
       };
     }
 

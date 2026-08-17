@@ -1,4 +1,12 @@
-export type DateRangeKey = 'TODAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'THIS_MONTH' | 'LAST_MONTH';
+export type DateRangeKey =
+  | 'TODAY'
+  | 'YESTERDAY'
+  | 'LAST_7_DAYS'
+  | 'LAST_10_DAYS'
+  | 'LAST_30_DAYS'
+  | 'THIS_MONTH'
+  | 'LAST_MONTH'
+  | 'CUSTOM';
 
 export interface ProductProfitabilityItem {
   id: string;

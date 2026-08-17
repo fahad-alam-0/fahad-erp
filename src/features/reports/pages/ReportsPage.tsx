@@ -17,6 +17,7 @@ import { InventoryAnalyticsWidget } from '../components/InventoryAnalyticsWidget
 import { RepairAnalyticsWidget } from '../components/RepairAnalyticsWidget';
 import { OwnerFinancialOverviewWidget } from '../components/OwnerFinancialOverviewWidget';
 import { RepairServicePerformanceWidget } from '../components/RepairServicePerformanceWidget';
+import { BusinessReportGeneratorWidget } from '../components/BusinessReportGeneratorWidget';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -153,6 +154,11 @@ export const ReportsPage: React.FC = () => {
           </div>
         }
       />
+
+      {/* Owner Business Report Generator Card */}
+      {isOwner && (
+        <BusinessReportGeneratorWidget userRole={userRole} />
+      )}
 
       {/* Report Category Tabs */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border pb-2 text-xs font-semibold">
