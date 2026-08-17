@@ -95,7 +95,9 @@ describe('Business Report Generator & Export Unit Tests', () => {
         owner_share: 300,
         technician_share: 700,
         technician_id: 'usr_tech_01',
-        technician: { full_name: 'Firoz Technician', role: 'TECHNICIAN' }
+        calculated_at: '2026-08-17T11:00:00Z',
+        technician: { full_name: 'Firoz Technician', role: 'TECHNICIAN' },
+        repair_job: mockRepairs[0]
       }
     ];
 
@@ -125,10 +127,9 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockSalePayments, error: null }) }) } as any;
       }
       if (table === 'repair_jobs') {
-        const order = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
-        const lte = vi.fn().mockReturnValue({ order });
+        const lte = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
         const gte = vi.fn().mockReturnValue({ lte });
-        return { select: vi.fn().mockReturnValue({ gte, in: vi.fn().mockResolvedValue({ data: mockRepairs, error: null }) }) } as any;
+        return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'repair_parts') {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockRepairParts, error: null }) }) } as any;
