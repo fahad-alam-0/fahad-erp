@@ -54,39 +54,23 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
     { key: 'CUSTOM', label: 'Custom Date Range' },
   ];
 
-  const validateDates = (): { valid: boolean; startDateStr: string; endDateStr: string; label: string } => {
+  const getBounds = () => {
     setValidationError(null);
-
-    if (dateRangeKey === 'CUSTOM') {
-      if (!customStartDate || !customEndDate) {
-        setValidationError('Please select both Start Date and End Date for custom report.');
-        return { valid: false, startDateStr: '', endDateStr: '', label: '' };
-      }
-
-      if (customStartDate > customEndDate) {
-        setValidationError('Start Date cannot be after End Date.');
-        return { valid: false, startDateStr: '', endDateStr: '', label: '' };
-      }
-
-      const bounds = reportsService.getDateRangeBounds('CUSTOM', customStartDate, customEndDate);
-      return { valid: true, startDateStr: bounds.startDate, endDateStr: bounds.endDate, label: bounds.label };
+    try {
+      return reportsService.getDateRangeBounds(dateRangeKey, customStartDate, customEndDate);
+    } catch (err: any) {
+      setValidationError(err.message || 'Invalid date range.');
+      return null;
     }
-
-    const bounds = reportsService.getDateRangeBounds(dateRangeKey);
-    return { valid: true, startDateStr: bounds.startDate, endDateStr: bounds.endDate, label: bounds.label };
   };
 
   const handleDownload = async () => {
-    const check = validateDates();
-    if (!check.valid) return;
+    const bounds = getBounds();
+    if (!bounds) return;
 
     try {
       setIsGenerating(true);
-      const data = await businessReportExportService.fetchReportData(
-        check.startDateStr,
-        check.endDateStr,
-        check.label
-      );
+      const data = await businessReportExportService.fetchReportData(bounds);
 
       if (format === 'EXCEL') {
         businessReportExportService.exportToExcel(data);
@@ -102,17 +86,13 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
   };
 
   const handlePreview = async () => {
-    const check = validateDates();
-    if (!check.valid) return;
+    const bounds = getBounds();
+    if (!bounds) return;
 
     try {
       setIsPreviewLoading(true);
       setValidationError(null);
-      const data = await businessReportExportService.fetchReportData(
-        check.startDateStr,
-        check.endDateStr,
-        check.label
-      );
+      const data = await businessReportExportService.fetchReportData(bounds);
       setPreviewData(data);
       setIsPreviewOpen(true);
     } catch (err: any) {
@@ -287,8 +267,8 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                   <Eye className="w-4 h-4 text-sky-500" />
                   <span>Report Summary Preview</span>
                 </h3>
-                <p className="text-[11px] text-muted-foreground">
-                  {previewData.periodLabel} ({previewData.startDateStr} to {previewData.endDateStr})
+                <p className="text-[11px] text-muted-foreground font-semibold">
+                  Reporting Period: {previewData.periodLabel}
                 </p>
               </div>
               <button
@@ -333,6 +313,27 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                   <p className="text-[10px] text-muted-foreground">Parts Cost: {formatCurrency(previewData.repairSummary.totalPartsCost, 'INR')}</p>
                 </div>
               </div>
+
+              {/* Worker Performance Preview */}
+              {previewData.workerPerformance.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-border">
+                  <p className="text-[11px] uppercase font-bold text-muted-foreground">Worker Repair Performance</p>
+                  <div className="space-y-1">
+                    {previewData.workerPerformance.map((w, idx) => (
+                      <div key={idx} className="p-2 rounded bg-muted/20 border border-border/50 flex items-center justify-between text-xs font-mono">
+                        <div>
+                          <span className="font-bold text-foreground">{w.workerName}</span>
+                          <span className="text-[10px] text-muted-foreground ml-1.5">({w.workerRole})</span>
+                        </div>
+                        <div>
+                          <span className="text-emerald-600 font-bold">{w.completedRepairs} jobs</span>
+                          <span className="text-muted-foreground ml-2">Net: {formatCurrency(w.netProfit, 'INR')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">TOTAL BUSINESS NET PROFIT</p>

@@ -30,10 +30,10 @@ describe('Sales Profitability Analysis Unit Tests', () => {
       },
     ];
 
-    // Mock sales table query chain: select -> gte -> lte -> order
+    // Mock sales table query chain: select -> gte -> lt / lte -> order
     const mockSalesOrder = vi.fn().mockResolvedValue({ data: mockSales, error: null });
-    const mockSalesLte = vi.fn().mockReturnValue({ order: mockSalesOrder });
-    const mockSalesGte = vi.fn().mockReturnValue({ lte: mockSalesLte });
+    const mockSalesLt = vi.fn().mockReturnValue({ order: mockSalesOrder });
+    const mockSalesGte = vi.fn().mockReturnValue({ lt: mockSalesLt, lte: mockSalesLt });
     const mockSalesSelect = vi.fn().mockReturnValue({ gte: mockSalesGte });
 
     // Mock sale_payments query
@@ -96,8 +96,8 @@ describe('Sales Profitability Analysis Unit Tests', () => {
     ];
 
     const mockSalesOrder = vi.fn().mockResolvedValue({ data: mockSales, error: null });
-    const mockSalesLte = vi.fn().mockReturnValue({ order: mockSalesOrder });
-    const mockSalesGte = vi.fn().mockReturnValue({ lte: mockSalesLte });
+    const mockSalesLt = vi.fn().mockReturnValue({ order: mockSalesOrder });
+    const mockSalesGte = vi.fn().mockReturnValue({ lt: mockSalesLt, lte: mockSalesLt });
     const mockSalesSelect = vi.fn().mockReturnValue({ gte: mockSalesGte });
 
     const mockPaymentsIn = vi.fn().mockResolvedValue({ data: [], error: null });

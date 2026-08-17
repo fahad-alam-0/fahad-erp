@@ -16,30 +16,32 @@ describe('Business Report Generator & Export Unit Tests', () => {
 
   it('1. Calculates DateRangeBounds for all supported period keys correctly', () => {
     const today = reportsService.getDateRangeBounds('TODAY');
-    expect(today.label).toBe('Today');
+    expect(today.periodLabel).toContain('Today');
+    expect(today.startInclusive).toBeDefined();
+    expect(today.endExclusive).toBeDefined();
 
     const yesterday = reportsService.getDateRangeBounds('YESTERDAY');
-    expect(yesterday.label).toBe('Yesterday');
+    expect(yesterday.periodLabel).toContain('Yesterday');
 
     const l7 = reportsService.getDateRangeBounds('LAST_7_DAYS');
-    expect(l7.label).toBe('Last 7 Days');
+    expect(l7.periodLabel).toContain('Last 7 Days');
 
     const l10 = reportsService.getDateRangeBounds('LAST_10_DAYS');
-    expect(l10.label).toBe('Last 10 Days');
+    expect(l10.periodLabel).toContain('Last 10 Days');
 
     const l30 = reportsService.getDateRangeBounds('LAST_30_DAYS');
-    expect(l30.label).toBe('Last 30 Days');
+    expect(l30.periodLabel).toContain('Last 30 Days');
 
     const tm = reportsService.getDateRangeBounds('THIS_MONTH');
-    expect(tm.label).toBe('This Month');
+    expect(tm.periodLabel).toContain('This Month');
 
     const lm = reportsService.getDateRangeBounds('LAST_MONTH');
-    expect(lm.label).toBe('Last Month');
+    expect(lm.periodLabel).toContain('Last Month');
 
     const custom = reportsService.getDateRangeBounds('CUSTOM', '2026-08-01', '2026-08-15');
-    expect(custom.label).toBe('2026-08-01 to 2026-08-15');
-    expect(new Date(custom.startDate).toLocaleDateString('en-IN')).toMatch(/1\/8\/2026/);
-    expect(new Date(custom.endDate).toLocaleDateString('en-IN')).toMatch(/15\/8\/2026/);
+    expect(custom.periodLabel).toContain('1 August 2026');
+    expect(custom.displayStart).toContain('1 August 2026');
+    expect(custom.displayEnd).toContain('15 August 2026');
   });
 
   it('2. Reconciles sales, product costs, repair profits, worker shares, and payment channels', async () => {
@@ -116,8 +118,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === 'sales') {
         const order = vi.fn().mockResolvedValue({ data: mockSales, error: null });
-        const lte = vi.fn().mockReturnValue({ order });
-        const gte = vi.fn().mockReturnValue({ lte });
+        const lt = vi.fn().mockReturnValue({ order });
+        const gte = vi.fn().mockReturnValue({ lt });
         return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'sale_items') {
@@ -127,8 +129,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockSalePayments, error: null }) }) } as any;
       }
       if (table === 'repair_jobs') {
-        const lte = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
-        const gte = vi.fn().mockReturnValue({ lte });
+        const lt = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
+        const gte = vi.fn().mockReturnValue({ lt });
         return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'repair_parts') {
@@ -141,8 +143,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }) } as any;
       }
       if (table === 'repair_profit_snapshots') {
-        const lte = vi.fn().mockResolvedValue({ data: mockSnapshots, error: null });
-        const gte = vi.fn().mockReturnValue({ lte });
+        const lt = vi.fn().mockResolvedValue({ data: mockSnapshots, error: null });
+        const gte = vi.fn().mockReturnValue({ lt });
         return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'products') {
@@ -150,8 +152,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
       }
       if (table === 'purchases') {
         const order = vi.fn().mockResolvedValue({ data: mockPurchases, error: null });
-        const lte = vi.fn().mockReturnValue({ order });
-        const gte = vi.fn().mockReturnValue({ lte });
+        const lt = vi.fn().mockReturnValue({ order });
+        const gte = vi.fn().mockReturnValue({ lt });
         return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'purchase_items') {
@@ -160,7 +162,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
       return {} as any;
     });
 
-    const report = await businessReportExportService.fetchReportData('2026-08-01T00:00:00Z', '2026-08-31T23:59:59Z', 'This Month');
+    const bounds = reportsService.getDateRangeBounds('THIS_MONTH');
+    const report = await businessReportExportService.fetchReportData(bounds);
 
     // Sales reconciliation
     expect(report.salesSummary.salesCount).toBe(1);

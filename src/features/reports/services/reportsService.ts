@@ -6,72 +6,163 @@ import {
   InventoryAnalytics,
   RepairAnalytics,
   OwnerFinancialOverview,
-  WorkerServicePerformance,
   RepairServicePerformanceReport,
-  ProductProfitabilityItem,
-  ProductProfitabilitySummary,
-  InventoryValuationItem,
+  WorkerServicePerformance,
   InventoryValuationSummary,
+  InventoryValuationItem,
+  ProductProfitabilitySummary,
+  ProductProfitabilityItem,
 } from '../types/reports.types';
 
+export interface DateRangeBounds {
+  startInclusive: string;
+  endExclusive: string;
+  startDate: string;
+  endDate: string;
+  displayStart: string;
+  displayEnd: string;
+  periodLabel: string;
+  label: string;
+}
+
+function formatDateHuman(d: Date): string {
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 export const reportsService = {
-  getDateRangeBounds(key: DateRangeKey, customStart?: string, customEnd?: string): { startDate: string; endDate: string; label: string } {
+  getDateRangeBounds(key: DateRangeKey, customStart?: string, customEnd?: string): DateRangeBounds {
     const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const day = now.getDate();
 
     if (key === 'TODAY') {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const start = new Date(year, month, day, 0, 0, 0, 0);
+      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
+      const dStr = formatDateHuman(start);
+      const label = `Today — ${dStr}`;
       return {
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
         startDate: start.toISOString(),
         endDate: end.toISOString(),
-        label: 'Today',
+        displayStart: dStr,
+        displayEnd: dStr,
+        periodLabel: label,
+        label,
       };
     }
 
     if (key === 'YESTERDAY') {
-      const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
-      const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+      const start = new Date(year, month, day - 1, 0, 0, 0, 0);
+      const end = new Date(year, month, day, 0, 0, 0, 0);
+      const dStr = formatDateHuman(start);
+      const label = `Yesterday — ${dStr}`;
       return {
-        startDate: yStart.toISOString(),
-        endDate: yEnd.toISOString(),
-        label: 'Yesterday',
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStr,
+        displayEnd: dStr,
+        periodLabel: label,
+        label,
       };
     }
 
     if (key === 'LAST_7_DAYS') {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+      const start = new Date(year, month, day - 7, 0, 0, 0, 0);
+      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
+      const dStart = formatDateHuman(start);
+      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
+      const label = `Last 7 Days (${dStart} — ${dEnd})`;
       return {
-        startDate: d.toISOString(),
-        endDate: now.toISOString(),
-        label: 'Last 7 Days',
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
       };
     }
 
     if (key === 'LAST_10_DAYS') {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 10, 0, 0, 0, 0);
+      const start = new Date(year, month, day - 10, 0, 0, 0, 0);
+      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
+      const dStart = formatDateHuman(start);
+      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
+      const label = `Last 10 Days (${dStart} — ${dEnd})`;
       return {
-        startDate: d.toISOString(),
-        endDate: now.toISOString(),
-        label: 'Last 10 Days',
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
       };
     }
 
     if (key === 'LAST_30_DAYS') {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
+      const start = new Date(year, month, day - 30, 0, 0, 0, 0);
+      const end = new Date(year, month, day + 1, 0, 0, 0, 0);
+      const dStart = formatDateHuman(start);
+      const dEnd = formatDateHuman(new Date(year, month, day, 0, 0, 0, 0));
+      const label = `Last 30 Days (${dStart} — ${dEnd})`;
       return {
-        startDate: d.toISOString(),
-        endDate: now.toISOString(),
-        label: 'Last 30 Days',
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
+      };
+    }
+
+    if (key === 'THIS_MONTH') {
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+      const dStart = formatDateHuman(start);
+      const lastDayOfMonth = new Date(year, month + 1, 0);
+      const dEnd = formatDateHuman(lastDayOfMonth);
+      const label = `This Month (${dStart} — ${dEnd})`;
+      return {
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
       };
     }
 
     if (key === 'LAST_MONTH') {
-      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-      const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const end = new Date(year, month, 1, 0, 0, 0, 0);
+      const dStart = formatDateHuman(start);
+      const lastDayOfLastMonth = new Date(year, month, 0);
+      const dEnd = formatDateHuman(lastDayOfLastMonth);
+      const label = `Last Month (${dStart} — ${dEnd})`;
       return {
-        startDate: startLastMonth.toISOString(),
-        endDate: endLastMonth.toISOString(),
-        label: 'Last Month',
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
       };
     }
 
@@ -79,20 +170,42 @@ export const reportsService = {
       const [sYear, sMonth, sDay] = customStart.split('-').map(Number);
       const [eYear, eMonth, eDay] = customEnd.split('-').map(Number);
       const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-      const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+      const end = new Date(eYear, eMonth - 1, eDay + 1, 0, 0, 0, 0);
+
+      if (end.getTime() <= start.getTime()) {
+        throw new Error('From date cannot be after To date.');
+      }
+
+      const dStart = formatDateHuman(start);
+      const dEnd = formatDateHuman(new Date(eYear, eMonth - 1, eDay, 0, 0, 0, 0));
+      const label = `${dStart} — ${dEnd}`;
       return {
+        startInclusive: start.toISOString(),
+        endExclusive: end.toISOString(),
         startDate: start.toISOString(),
         endDate: end.toISOString(),
-        label: `${customStart} to ${customEnd}`,
+        displayStart: dStart,
+        displayEnd: dEnd,
+        periodLabel: label,
+        label,
       };
     }
 
     // Default: THIS_MONTH
-    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const start = new Date(year, month, 1, 0, 0, 0, 0);
+    const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+    const dStart = formatDateHuman(start);
+    const dEnd = formatDateHuman(new Date(year, month + 1, 0));
+    const label = `This Month (${dStart} — ${dEnd})`;
     return {
-      startDate: startThisMonth.toISOString(),
-      endDate: now.toISOString(),
-      label: 'This Month',
+      startInclusive: start.toISOString(),
+      endExclusive: end.toISOString(),
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      displayStart: dStart,
+      displayEnd: dEnd,
+      periodLabel: label,
+      label,
     };
   },
 
@@ -101,7 +214,7 @@ export const reportsService = {
       .from('sales')
       .select('id, sale_number, sale_date, subtotal, discount, total_amount, created_at')
       .gte('created_at', startDate)
-      .lte('created_at', endDate)
+      .lt('created_at', endDate)
       .order('created_at', { ascending: true });
 
     if (salesErr) {
@@ -264,7 +377,7 @@ export const reportsService = {
       .from('purchases')
       .select('id, purchase_number, purchase_date, subtotal, discount, total_amount, created_at, supplier:suppliers(name)')
       .gte('created_at', startDate)
-      .lte('created_at', endDate)
+      .lt('created_at', endDate)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -429,7 +542,7 @@ export const reportsService = {
       .from('repair_jobs')
       .select('status, service_revenue, financial_status, payment_status, created_at')
       .gte('received_at', startDate)
-      .lte('received_at', endDate);
+      .lt('received_at', endDate);
 
     if (userRole === 'TECHNICIAN' && userId) {
       req = req.eq('technician_id', userId);
@@ -493,12 +606,12 @@ export const reportsService = {
     if (userRole !== 'OWNER') return null;
 
     const [salesRes, purRes, snapsRes] = await Promise.all([
-      supabase.from('sales').select('total_amount').gte('created_at', startDate).lte('created_at', endDate),
-      supabase.from('purchases').select('total_amount').gte('created_at', startDate).lte('created_at', endDate),
+      supabase.from('sales').select('total_amount').gte('created_at', startDate).lt('created_at', endDate),
+      supabase.from('purchases').select('total_amount').gte('created_at', startDate).lt('created_at', endDate),
       (supabase.from('repair_profit_snapshots') as any)
         .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name)')
         .gte('calculated_at', startDate)
-        .lte('calculated_at', endDate),
+        .lt('calculated_at', endDate),
     ]);
 
     const salesRevenue = (salesRes.data || []).reduce((sum: number, s: any) => sum + Number(s.total_amount || 0), 0);
@@ -552,7 +665,7 @@ export const reportsService = {
     let query = (supabase.from('repair_profit_snapshots') as any)
       .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role)')
       .gte('calculated_at', startDate)
-      .lte('calculated_at', endDate);
+      .lt('calculated_at', endDate);
 
     // If TECHNICIAN, filter by technician_id = userId
     if (userRole === 'TECHNICIAN' && userId) {

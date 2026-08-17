@@ -55,42 +55,26 @@ export const DownloadBusinessReportModal: React.FC<DownloadBusinessReportModalPr
     { key: 'CUSTOM', label: 'Custom Date Range' },
   ];
 
-  const validateDates = (): { valid: boolean; startDateStr: string; endDateStr: string; label: string } => {
+  const getBounds = () => {
     setValidationError(null);
-
-    if (dateRangeKey === 'CUSTOM') {
-      if (!customStartDate || !customEndDate) {
-        setValidationError('Please select both From Date and To Date for custom report.');
-        return { valid: false, startDateStr: '', endDateStr: '', label: '' };
-      }
-
-      if (customStartDate > customEndDate) {
-        setValidationError('From Date cannot be after To Date.');
-        return { valid: false, startDateStr: '', endDateStr: '', label: '' };
-      }
-
-      const bounds = reportsService.getDateRangeBounds('CUSTOM', customStartDate, customEndDate);
-      return { valid: true, startDateStr: bounds.startDate, endDateStr: bounds.endDate, label: bounds.label };
+    try {
+      return reportsService.getDateRangeBounds(dateRangeKey, customStartDate, customEndDate);
+    } catch (err: any) {
+      setValidationError(err.message || 'Invalid date range.');
+      return null;
     }
-
-    const bounds = reportsService.getDateRangeBounds(dateRangeKey);
-    return { valid: true, startDateStr: bounds.startDate, endDateStr: bounds.endDate, label: bounds.label };
   };
 
   const handleDownload = async () => {
-    const check = validateDates();
-    if (!check.valid) return;
+    const bounds = getBounds();
+    if (!bounds) return;
 
     try {
       setIsGenerating(true);
       setSuccessMessage(null);
 
       // Fetch fresh real-time database metrics right at download moment
-      const data = await businessReportExportService.fetchReportData(
-        check.startDateStr,
-        check.endDateStr,
-        check.label
-      );
+      const data = await businessReportExportService.fetchReportData(bounds);
 
       if (format === 'EXCEL') {
         businessReportExportService.exportToExcel(data);

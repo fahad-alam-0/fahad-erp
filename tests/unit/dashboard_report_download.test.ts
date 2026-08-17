@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { businessReportExportService } from '@/features/reports/services/businessReportExportService';
+import { reportsService } from '@/features/reports/services/reportsService';
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
@@ -12,11 +13,13 @@ describe('Owner Dashboard Report Download Integration Tests', () => {
     vi.clearAllMocks();
   });
 
-  it('1. Verifies businessReportExportService is called with fresh database data on demand', async () => {
+  it('1. Verifies businessReportExportService is called with fresh database data on demand using bounds', async () => {
+    const bounds = reportsService.getDateRangeBounds('TODAY');
+
     const fetchSpy = vi.spyOn(businessReportExportService, 'fetchReportData').mockResolvedValue({
-      periodLabel: 'Today',
-      startDateStr: '17/08/2026',
-      endDateStr: '17/08/2026',
+      periodLabel: bounds.periodLabel,
+      startDateStr: bounds.displayStart,
+      endDateStr: bounds.displayEnd,
       salesSummary: { salesCount: 1, totalRevenue: 1000, totalCost: 600, totalProfit: 400 },
       salesItems: [],
       paymentSummary: { posCash: 1000, posUpi: 0, posCard: 0, repairCash: 0, repairUpi: 0, repairCard: 0, totalCash: 1000, totalUpi: 0, totalCard: 0, totalCollected: 1000 },
@@ -32,10 +35,10 @@ describe('Owner Dashboard Report Download Integration Tests', () => {
 
     const excelSpy = vi.spyOn(businessReportExportService, 'exportToExcel').mockImplementation(() => {});
 
-    const data = await businessReportExportService.fetchReportData('2026-08-17T00:00:00Z', '2026-08-17T23:59:59Z', 'Today');
+    const data = await businessReportExportService.fetchReportData(bounds);
     businessReportExportService.exportToExcel(data);
 
-    expect(fetchSpy).toHaveBeenCalledWith('2026-08-17T00:00:00Z', '2026-08-17T23:59:59Z', 'Today');
+    expect(fetchSpy).toHaveBeenCalledWith(bounds);
     expect(excelSpy).toHaveBeenCalledWith(data);
   });
 });

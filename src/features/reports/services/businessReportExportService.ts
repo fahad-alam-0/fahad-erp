@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { formatCurrency } from '@/lib/utils';
+import { DateRangeBounds } from './reportsService';
 
 export interface DetailedReportData {
   periodLabel: string;
@@ -130,15 +130,35 @@ export interface DetailedReportData {
 }
 
 export const businessReportExportService = {
-  async fetchReportData(startDate: string, endDate: string, periodLabel: string): Promise<DetailedReportData> {
+  async fetchReportData(boundsOrStart: DateRangeBounds | string, endExclusiveStr?: string, labelStr?: string): Promise<DetailedReportData> {
+    let startInclusive: string;
+    let endExclusive: string;
+    let periodLabel: string;
+    let startDateStr: string;
+    let endDateStr: string;
+
+    if (typeof boundsOrStart === 'object' && boundsOrStart.startInclusive) {
+      startInclusive = boundsOrStart.startInclusive;
+      endExclusive = boundsOrStart.endExclusive;
+      periodLabel = boundsOrStart.periodLabel;
+      startDateStr = boundsOrStart.displayStart;
+      endDateStr = boundsOrStart.displayEnd;
+    } else {
+      startInclusive = boundsOrStart as string;
+      endExclusive = endExclusiveStr || boundsOrStart as string;
+      periodLabel = labelStr || 'Report Period';
+      startDateStr = new Date(startInclusive).toLocaleDateString('en-IN');
+      endDateStr = new Date(endExclusive).toLocaleDateString('en-IN');
+    }
+
     // --------------------------------------------------
-    // 1. FETCH SALES (Same query as reportsService.ts)
+    // 1. FETCH SALES (gte startInclusive AND lt endExclusive)
     // --------------------------------------------------
     const { data: sales, error: salesErr } = await supabase
       .from('sales')
       .select('id, sale_number, sale_date, subtotal, discount, total_amount, created_at, customer:customers(name)')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
+      .gte('created_at', startInclusive)
+      .lt('created_at', endExclusive)
       .order('created_at', { ascending: true });
 
     if (salesErr) {
@@ -226,12 +246,12 @@ export const businessReportExportService = {
     const totalSalesProfit = totalSalesRevenue - totalSalesCost;
 
     // --------------------------------------------------
-    // 2. FETCH REPAIRS & PROFIT SNAPSHOTS (Same query as getRepairServicePerformanceReport in reportsService.ts)
+    // 2. FETCH REPAIRS & PROFIT SNAPSHOTS (gte startInclusive AND lt endExclusive)
     // --------------------------------------------------
     const { data: snapData, error: snapErr } = await (supabase.from('repair_profit_snapshots') as any)
-      .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role), repair_job:repair_jobs!left(repair_number, device_brand, device_model, status, financial_status, payment_status, created_at, customer:customers(name))')
-      .gte('calculated_at', startDate)
-      .lte('calculated_at', endDate);
+      .select('*, technician:profiles!repair_profit_snapshots_technician_id_fkey!left(full_name, role), repair_job:repair_jobs!left(repair_number, device_brand, device_model, status, payment_status, created_at, customer:customers(name))')
+      .gte('calculated_at', startInclusive)
+      .lt('calculated_at', endExclusive);
 
     if (snapErr) {
       console.error('Error fetching repair profit snapshots for export:', snapErr);
@@ -243,8 +263,8 @@ export const businessReportExportService = {
     const { data: periodRepairs } = await supabase
       .from('repair_jobs')
       .select('id, repair_number, status, payment_status, created_at')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate);
+      .gte('created_at', startInclusive)
+      .lt('created_at', endExclusive);
 
     const periodRepairList = periodRepairs || [];
     const newTicketsCount = periodRepairList.length;
@@ -385,7 +405,7 @@ export const businessReportExportService = {
     const workerPerfList = Array.from(workerPerfMap.values());
 
     // --------------------------------------------------
-    // 3. FETCH CURRENT INVENTORY (Same query as getInventoryAnalytics in reportsService.ts)
+    // 3. FETCH CURRENT INVENTORY (Always Current Stock Value)
     // --------------------------------------------------
     const { data: products, error: prodErr } = await supabase
       .from('products')
@@ -438,13 +458,13 @@ export const businessReportExportService = {
     });
 
     // --------------------------------------------------
-    // 4. FETCH PURCHASES (Same query as getPurchasingAnalytics in reportsService.ts)
+    // 4. FETCH PURCHASES (gte startInclusive AND lt endExclusive)
     // --------------------------------------------------
     const { data: purchases, error: purErr } = await supabase
       .from('purchases')
       .select('id, purchase_number, purchase_date, total_amount, discount_amount, final_amount, payment_status, created_at, supplier:suppliers(name), purchase_items(quantity, unit_cost_price, product:products(name))')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
+      .gte('created_at', startInclusive)
+      .lt('created_at', endExclusive)
       .order('created_at', { ascending: true });
 
     if (purErr) {
@@ -482,39 +502,25 @@ export const businessReportExportService = {
       });
     });
 
-    // --------------------------------------------------
-    // PHASE 2 TEMPORARY DEBUG LOGGING (Trace Data End-to-End)
-    // --------------------------------------------------
+    // Phase 15 Debug Log Trace
     console.log(`========== BUSINESS REPORT EXPORT DEBUG ==========
-SELECTED RANGE: ${periodLabel}
-START: ${startDate}
-END: ${endDate}
+REPORT RANGE: ${periodLabel}
+startInclusive: ${startInclusive}
+endExclusive: ${endExclusive}
 TIMEZONE: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 
-SALES ROW COUNT: ${salesList.length}
-SALES REVENUE: ${totalSalesRevenue}
-SALE ITEMS ROW COUNT: ${salesItemsDetailed.length}
-
-PROFIT SNAPSHOT ROW COUNT: ${snapsList.length}
-REPAIR SERVICE REVENUE: ${totalServiceRev}
-REPAIR PART COST: ${totalRepairPartsCost}
-NET REPAIR PROFIT: ${totalNetRepairProfit}
-OWNER SHARE: ${totalOwnerRepairShare}
-TECHNICIAN SHARE: ${totalTechRepairPayout}
-
-WORKER PERFORMANCE ROW COUNT: ${workerPerfList.length}
-WORKER PERFORMANCE EXPORT DATA:`, workerPerfList, `
-
-PAYMENT ROW COUNT: ${payData.length + rPayData.length}
-INVENTORY PRODUCT ROW COUNT: ${inventoryItemsDetailed.length}
-INVENTORY STOCK UNITS: ${totalStockUnits}
-INVENTORY VALUE: ${currentInventoryValue}
+SALES: rowCount=${salesList.length}, revenue=${totalSalesRevenue}
+REPAIRS: rowCount=${snapsList.length}, revenue=${totalServiceRev}, partsCost=${totalRepairPartsCost}
+PROFIT SNAPSHOTS: rowCount=${snapsList.length}, ownerShare=${totalOwnerRepairShare}, techShare=${totalTechRepairPayout}
+PAYMENTS: rowCount=${payData.length + rPayData.length}, cash=${posCash + repairCash}, upi=${posUpi + repairUpi}, card=${posCard + repairCard}
+WORKERS: rowCount=${workerPerfList.length}
+INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits}, inventoryValue=${currentInventoryValue}
 ==================================================`);
 
     return {
       periodLabel,
-      startDateStr: new Date(startDate).toLocaleDateString('en-IN'),
-      endDateStr: new Date(endDate).toLocaleDateString('en-IN'),
+      startDateStr,
+      endDateStr,
 
       salesSummary: {
         salesCount: salesList.length,
@@ -583,8 +589,8 @@ INVENTORY VALUE: ${currentInventoryValue}
 
     // Sheet 1: Executive Summary
     const summaryRows = [
-      ['FAHAD ERP — BUSINESS REPORT EXECUTIVE SUMMARY'],
-      ['Reporting Period:', `${data.periodLabel} (${data.startDateStr} to ${data.endDateStr})`],
+      ['FAHAD ELECTRONICS — BUSINESS REPORT EXECUTIVE SUMMARY'],
+      ['Reporting Period:', data.periodLabel],
       [],
       ['SALES SUMMARY'],
       ['Total Completed Sales:', data.salesSummary.salesCount],
@@ -708,7 +714,7 @@ INVENTORY VALUE: ${currentInventoryValue}
     XLSX.utils.book_append_sheet(wb, wsPur, 'Purchases');
 
     // Save Workbook
-    const filename = `FAHAD_ERP_Business_Report_${data.startDateStr.replace(/\//g, '-')}_to_${data.endDateStr.replace(/\//g, '-')}.xlsx`;
+    const filename = `FAHAD_ERP_Business_Report_${data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
     XLSX.writeFile(wb, filename);
   },
 
@@ -716,89 +722,97 @@ INVENTORY VALUE: ${currentInventoryValue}
     const doc = new jsPDF();
     let currentY = 15;
 
-    // Document Title Header
+    // Document Title & Subtitle Header
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('FAHAD ERP — BUSINESS REPORT', 14, currentY);
+    doc.text('FAHAD ELECTRONICS', 14, currentY);
+    currentY += 6;
+
+    doc.setFontSize(12);
+    doc.text('BUSINESS PERFORMANCE REPORT', 14, currentY);
     currentY += 6;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Reporting Period: ${data.periodLabel} (${data.startDateStr} to ${data.endDateStr})`, 14, currentY);
+    doc.text(`Reporting Period: ${data.periodLabel}`, 14, currentY);
     currentY += 8;
 
-    // Executive Summary Table
+    // Helper for currency formatting
+    const fmt = (num: number) => `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // 1. BUSINESS SUMMARY TABLE
     autoTable(doc, {
       startY: currentY,
-      head: [['KPI Category', 'Metric / Summary Description', 'Amount (INR)']],
+      head: [['1. BUSINESS SUMMARY', 'Metric / Count Description', 'Amount (INR)']],
       body: [
-        ['Sales Revenue', `${data.salesSummary.salesCount} Completed Sales`, formatCurrency(data.salesSummary.totalRevenue, 'INR')],
-        ['Product Cost Basis', 'Historical unit cost at sale time', formatCurrency(data.salesSummary.totalCost, 'INR')],
-        ['Product Gross Profit', 'Sales Revenue - Product Cost', formatCurrency(data.salesSummary.totalProfit, 'INR')],
-        ['Repair Service Revenue', `${data.repairSummary.deliveredCount} Delivered Repairs`, formatCurrency(data.repairSummary.totalServiceRevenue, 'INR')],
-        ['Repair Parts Cost', 'Component replacement cost', formatCurrency(data.repairSummary.totalPartsCost, 'INR')],
-        ['Net Repair Profit', 'Service Revenue - Parts Cost', formatCurrency(data.repairSummary.netRepairProfit, 'INR')],
-        ['Owner Repair Share', 'Owner profit allocation', formatCurrency(data.repairSummary.totalOwnerShare, 'INR')],
-        ['Technician Payout', 'Technician 70% share allocation', formatCurrency(data.repairSummary.totalTechnicianPayout, 'INR')],
-        ['TOTAL BUSINESS NET PROFIT', 'Sales Profit + Net Repair Profit', formatCurrency(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit, 'INR')],
+        ['Sales Revenue', `${data.salesSummary.salesCount} Completed POS Sales`, fmt(data.salesSummary.totalRevenue)],
+        ['Product Cost Basis', 'Historical unit cost at sale time', fmt(data.salesSummary.totalCost)],
+        ['Product Gross Profit', 'Sales Revenue - Product Cost', fmt(data.salesSummary.totalProfit)],
+        ['Repair Service Revenue', `${data.repairSummary.deliveredCount} Delivered Repairs`, fmt(data.repairSummary.totalServiceRevenue)],
+        ['Repair Parts Cost', 'Component replacement cost', fmt(data.repairSummary.totalPartsCost)],
+        ['Net Repair Profit', 'Service Revenue - Parts Cost', fmt(data.repairSummary.netRepairProfit)],
+        ['Owner Repair Share', 'Owner profit allocation', fmt(data.repairSummary.totalOwnerShare)],
+        ['Technician Payout', 'Technician 70% share allocation', fmt(data.repairSummary.totalTechnicianPayout)],
+        ['TOTAL BUSINESS NET PROFIT', 'Sales Profit + Net Repair Profit', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
       ],
       theme: 'grid',
       headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8.5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // Payment Collection Channels
+    // 2. PAYMENT COLLECTION CHANNELS
     autoTable(doc, {
       startY: currentY,
-      head: [['Payment Channel', 'POS Sales (₹)', 'Repair Payments (₹)', 'Total Collected (₹)']],
+      head: [['2. PAYMENT COLLECTION CHANNELS', 'POS Sales (₹)', 'Repair Payments (₹)', 'Total Collected (₹)']],
       body: [
-        ['Cash Settlement', formatCurrency(data.paymentSummary.posCash, 'INR'), formatCurrency(data.paymentSummary.repairCash, 'INR'), formatCurrency(data.paymentSummary.totalCash, 'INR')],
-        ['UPI Digital Transfer', formatCurrency(data.paymentSummary.posUpi, 'INR'), formatCurrency(data.paymentSummary.repairUpi, 'INR'), formatCurrency(data.paymentSummary.totalUpi, 'INR')],
-        ['Card / POS Machine', formatCurrency(data.paymentSummary.posCard, 'INR'), formatCurrency(data.paymentSummary.repairCard, 'INR'), formatCurrency(data.paymentSummary.totalCard, 'INR')],
-        ['TOTAL COLLECTION', formatCurrency(data.salesSummary.totalRevenue, 'INR'), formatCurrency(data.repairSummary.totalServiceRevenue, 'INR'), formatCurrency(data.paymentSummary.totalCollected, 'INR')],
+        ['Cash Settlement', fmt(data.paymentSummary.posCash), fmt(data.paymentSummary.repairCash), fmt(data.paymentSummary.totalCash)],
+        ['UPI Digital Transfer', fmt(data.paymentSummary.posUpi), fmt(data.paymentSummary.repairUpi), fmt(data.paymentSummary.totalUpi)],
+        ['Card / POS Machine', fmt(data.paymentSummary.posCard), fmt(data.paymentSummary.repairCard), fmt(data.paymentSummary.totalCard)],
+        ['TOTAL COLLECTION', fmt(data.salesSummary.totalRevenue), fmt(data.repairSummary.totalServiceRevenue), fmt(data.paymentSummary.totalCollected)],
       ],
       theme: 'striped',
       headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
       styles: { fontSize: 8.5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // Worker Performance Table (ALWAYS RENDER WORKER PERFORMANCE SECTION)
-    const workerBodyRows = data.workerPerformance.length > 0
+    // 3. WORKER REPAIR PERFORMANCE & SHARE
+    const workerRows = data.workerPerformance.length > 0
       ? data.workerPerformance.map((w) => [
           w.workerName,
           w.workerRole,
           w.completedRepairs.toString(),
-          formatCurrency(w.serviceRevenue, 'INR'),
-          formatCurrency(w.netProfit, 'INR'),
-          formatCurrency(w.ownerShare, 'INR'),
-          formatCurrency(w.technicianShare, 'INR'),
+          fmt(w.serviceRevenue),
+          fmt(w.netProfit),
+          fmt(w.ownerShare),
+          fmt(w.technicianShare),
         ])
-      : [['No worker activity recorded in period', '-', '0', '₹0.00', '₹0.00', '₹0.00', '₹0.00']];
+      : [['No finalized repair worker activity for this period', '-', '0', fmt(0), fmt(0), fmt(0), fmt(0)]];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Worker Name', 'Role', 'Completed', 'Revenue (₹)', 'Net Profit (₹)', 'Owner Share (₹)', 'Tech Share (₹)']],
-      body: workerBodyRows,
+      head: [['3. WORKER REPAIR PERFORMANCE', 'Role', 'Completed', 'Revenue', 'Net Profit', 'Owner Share', 'Tech Share']],
+      body: workerRows,
       theme: 'grid',
       headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
       styles: { fontSize: 8.5 },
     });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+    currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // Inventory Valuation Summary
+    // 4. CURRENT INVENTORY VALUATION
     autoTable(doc, {
       startY: currentY,
-      head: [['Inventory Valuation Metric', 'Value']],
+      head: [['4. CURRENT INVENTORY VALUATION', 'Value / Metric']],
       body: [
         ['Active Products in Catalog', data.inventorySummary.totalActiveProducts.toString()],
         ['Total Stock Units', data.inventorySummary.totalStockUnits.toString()],
-        ['Current Inventory Cost Value', formatCurrency(data.inventorySummary.currentInventoryValue, 'INR')],
-        ['Potential Sales Value', formatCurrency(data.inventorySummary.potentialSalesValue, 'INR')],
+        ['Current Inventory Cost Value', fmt(data.inventorySummary.currentInventoryValue)],
+        ['Potential Sales Value', fmt(data.inventorySummary.potentialSalesValue)],
+        ['Potential Inventory Gross Margin', fmt(data.inventorySummary.potentialSalesValue - data.inventorySummary.currentInventoryValue)],
         ['Low Stock Alerts', data.inventorySummary.lowStockCount.toString()],
         ['Out of Stock Items', data.inventorySummary.outOfStockCount.toString()],
       ],
@@ -807,8 +821,26 @@ INVENTORY VALUE: ${currentInventoryValue}
       styles: { fontSize: 8.5 },
     });
 
+    currentY = (doc as any).lastAutoTable.finalY + 8;
+
+    // 5. BUSINESS PROFIT SUMMARY
+    autoTable(doc, {
+      startY: currentY,
+      head: [['5. BUSINESS PROFIT SUMMARY', 'Amount (INR)']],
+      body: [
+        ['Sales Gross Profit', fmt(data.salesSummary.totalProfit)],
+        ['Repair Net Profit', fmt(data.repairSummary.netRepairProfit)],
+        ['TOTAL BUSINESS PROFIT', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
+        ['OWNER RETAINED PROFIT SHARE', fmt(data.salesSummary.totalProfit + data.repairSummary.totalOwnerShare)],
+        ['TECHNICIAN PAYOUT SHARE', fmt(data.repairSummary.totalTechnicianPayout)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 8.5 },
+    });
+
     // Save PDF
-    const filename = `FAHAD_ERP_Business_Report_${data.startDateStr.replace(/\//g, '-')}_to_${data.endDateStr.replace(/\//g, '-')}.pdf`;
+    const filename = `FAHAD_ERP_Business_Report_${data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
     doc.save(filename);
   },
 };
