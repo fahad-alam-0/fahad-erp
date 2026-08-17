@@ -295,54 +295,85 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
             </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Sales Revenue (INR)</p>
-                  <p className="text-base font-bold text-emerald-600 font-mono">
-                    {formatCurrency(previewData.salesSummary.totalRevenue, 'INR')}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">{previewData.salesSummary.salesCount} Completed Sales</p>
+              {/* 1. SEPARATED FINANCIAL OVERVIEW */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Sales Performance Card */}
+                <div className="p-3.5 rounded-xl bg-muted/30 border border-border space-y-1.5">
+                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">
+                    Sales / POS Performance
+                  </span>
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="text-muted-foreground">Sales Revenue:</span>
+                    <strong className="text-emerald-600 font-bold">{formatCurrency(previewData.salesSummary.totalRevenue, 'INR')}</strong>
+                  </div>
+                  <div className="flex items-center justify-between font-mono text-[11px]">
+                    <span className="text-muted-foreground">Product Cost:</span>
+                    <span className="text-destructive">-{formatCurrency(previewData.salesSummary.totalCost, 'INR')}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono pt-1 border-t border-border/50">
+                    <span className="font-bold text-foreground">Product Profit:</span>
+                    <strong className="text-primary font-bold">{formatCurrency(previewData.salesSummary.totalProfit, 'INR')}</strong>
+                  </div>
                 </div>
 
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Product Profit (INR)</p>
-                  <p className="text-base font-bold text-primary font-mono">
-                    {formatCurrency(previewData.salesSummary.totalProfit, 'INR')}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">Cost: {formatCurrency(previewData.salesSummary.totalCost, 'INR')}</p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Repair Revenue (INR)</p>
-                  <p className="text-base font-bold text-emerald-600 font-mono">
-                    {formatCurrency(previewData.repairSummary.totalServiceRevenue, 'INR')}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">{previewData.repairSummary.deliveredCount} Delivered Repairs</p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-muted/30 border border-border">
-                  <p className="text-[10px] text-muted-foreground uppercase font-bold">Net Repair Profit (INR)</p>
-                  <p className="text-base font-bold text-primary font-mono">
-                    {formatCurrency(previewData.repairSummary.netRepairProfit, 'INR')}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">Parts Cost: {formatCurrency(previewData.repairSummary.totalPartsCost, 'INR')}</p>
+                {/* Repair Performance Card */}
+                <div className="p-3.5 rounded-xl bg-muted/30 border border-border space-y-1.5">
+                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">
+                    Repair Service Performance
+                  </span>
+                  <div className="flex items-center justify-between font-mono">
+                    <span className="text-muted-foreground">Repair Revenue:</span>
+                    <strong className="text-emerald-600 font-bold">{formatCurrency(previewData.repairSummary.totalServiceRevenue, 'INR')}</strong>
+                  </div>
+                  <div className="flex items-center justify-between font-mono text-[11px]">
+                    <span className="text-muted-foreground">Parts Cost:</span>
+                    <span className="text-destructive">-{formatCurrency(previewData.repairSummary.totalPartsCost, 'INR')}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-mono pt-1 border-t border-border/50">
+                    <span className="font-bold text-foreground">Net Repair Profit:</span>
+                    <strong className="text-primary font-bold">{formatCurrency(previewData.repairSummary.netRepairProfit, 'INR')}</strong>
+                  </div>
                 </div>
               </div>
 
-              {/* Worker Performance Preview */}
+              {/* 2. PAYMENT COLLECTION BY CHANNEL */}
+              <div className="p-3 rounded-xl bg-muted/20 border border-border space-y-2">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">
+                  Payment Collection Summary
+                </span>
+                <div className="grid grid-cols-3 gap-2 font-mono text-center text-[11px]">
+                  <div className="p-2 rounded bg-background border border-border">
+                    <span className="text-muted-foreground block text-[10px]">Cash</span>
+                    <strong className="text-foreground">{formatCurrency(previewData.paymentSummary.totalCash, 'INR')}</strong>
+                  </div>
+                  <div className="p-2 rounded bg-background border border-border">
+                    <span className="text-muted-foreground block text-[10px]">UPI</span>
+                    <strong className="text-foreground">{formatCurrency(previewData.paymentSummary.totalUpi, 'INR')}</strong>
+                  </div>
+                  <div className="p-2 rounded bg-background border border-border">
+                    <span className="text-muted-foreground block text-[10px]">Card</span>
+                    <strong className="text-foreground">{formatCurrency(previewData.paymentSummary.totalCard, 'INR')}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. WORKER PERFORMANCE PREVIEW */}
               {previewData.workerPerformance.length > 0 && (
                 <div className="space-y-1.5 pt-2 border-t border-border">
-                  <p className="text-[11px] uppercase font-bold text-muted-foreground">Worker Repair Performance</p>
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                    Worker Service Performance ({previewData.workerPerformance.length} Workers)
+                  </span>
                   <div className="space-y-1">
                     {previewData.workerPerformance.map((w, idx) => (
-                      <div key={idx} className="p-2 rounded bg-muted/20 border border-border/50 flex items-center justify-between text-xs font-mono">
+                      <div key={idx} className="p-2 rounded-lg bg-muted/30 border border-border/60 flex items-center justify-between font-mono text-[11px]">
                         <div>
-                          <span className="font-bold text-foreground">{w.workerName}</span>
-                          <span className="text-[10px] text-muted-foreground ml-1.5">({w.workerRole})</span>
+                          <strong className="text-foreground">{w.workerName}</strong>
+                          <span className="text-muted-foreground ml-1.5 text-[10px]">({w.workerRole})</span>
                         </div>
-                        <div>
+                        <div className="flex items-center space-x-3">
                           <span className="text-emerald-600 font-bold">{w.completedRepairs} jobs</span>
-                          <span className="text-muted-foreground ml-2">Net: {formatCurrency(w.netProfit, 'INR')}</span>
+                          <span className="text-foreground">Revenue: {formatCurrency(w.serviceRevenue, 'INR')}</span>
+                          <span className="text-primary font-bold">Tech: {formatCurrency(w.technicianShare, 'INR')}</span>
                         </div>
                       </div>
                     ))}
@@ -350,10 +381,55 @@ export const BusinessReportGeneratorWidget: React.FC<BusinessReportGeneratorWidg
                 </div>
               )}
 
+              {/* 4. REPAIR STATUS WORKLOAD SUMMARY */}
+              <div className="space-y-1.5 pt-2 border-t border-border">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground block">
+                  Repair Status Workload (Current Shop Pipeline)
+                </span>
+                <div className="grid grid-cols-4 gap-1.5 font-mono text-[10px] text-center">
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Received</span>
+                    <strong className="text-foreground">{previewData.repairStatusCounts['RECEIVED'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Diagnosing</span>
+                    <strong className="text-foreground">{previewData.repairStatusCounts['DIAGNOSING'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">In Repair</span>
+                    <strong className="text-foreground">{previewData.repairStatusCounts['IN_REPAIR'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Testing</span>
+                    <strong className="text-foreground">{previewData.repairStatusCounts['TESTING'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Ready</span>
+                    <strong className="text-foreground">{previewData.repairStatusCounts['READY_FOR_PICKUP'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Delivered</span>
+                    <strong className="text-emerald-600 font-bold">{previewData.repairStatusCounts['DELIVERED'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Cancelled</span>
+                    <strong className="text-destructive font-bold">{previewData.repairStatusCounts['CANCELLED'] || 0}</strong>
+                  </div>
+                  <div className="p-1.5 rounded bg-muted/40 border border-border">
+                    <span className="text-muted-foreground block">Parts Wait</span>
+                    <strong className="text-amber-600 font-bold">{previewData.repairStatusCounts['WAITING_FOR_PARTS'] || 0}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* OVERALL BUSINESS SUMMARY */}
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-1">
                 <p className="text-[10px] uppercase font-bold text-muted-foreground">TOTAL BUSINESS NET PROFIT (INR)</p>
                 <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(previewData.salesSummary.totalProfit + previewData.repairSummary.netRepairProfit, 'INR')}
+                  {formatCurrency(previewData.overallSummary.totalBusinessProfit, 'INR')}
+                </p>
+                <p className="text-[11px] text-muted-foreground font-mono">
+                  Total Business Revenue: {formatCurrency(previewData.overallSummary.totalBusinessRevenue, 'INR')} | Total Collected: {formatCurrency(previewData.overallSummary.totalMoneyCollected, 'INR')}
                 </p>
               </div>
             </div>

@@ -66,7 +66,8 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
         completed_at: '2026-08-17T11:00:00Z',
         delivered_at: '2026-08-17T12:00:00Z',
         technician_id: 'usr_tech_01',
-        customer: { name: 'Firoz' }
+        customer: { full_name: 'Firoz' },
+        technician: { full_name: 'Munnu Technician', role: 'TECHNICIAN' },
       }
     ];
 
@@ -123,7 +124,7 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
       if (table === 'repair_jobs') {
         const lt = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
         const gte = vi.fn().mockReturnValue({ lt });
-        return { select: vi.fn().mockReturnValue({ gte }) } as any;
+        return { select: vi.fn().mockResolvedValue({ data: mockRepairs, error: null }) } as any;
       }
       if (table === 'repair_parts') {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockRepairParts, error: null }) }) } as any;
@@ -182,12 +183,19 @@ describe('Business Report Generator & Comprehensive Regression Unit Tests', () =
     expect(report.workerPerformance[0].technicianShare).toBe(3570);
 
     // Cash/UPI/Card totals
-    expect(report.paymentSummary.posUpi).toBe(1500);
+    expect(report.paymentSummary.salesUpi).toBe(1500);
     expect(report.paymentSummary.repairCash).toBe(4100);
     expect(report.paymentSummary.repairUpi).toBe(1000);
     expect(report.paymentSummary.totalCash).toBe(4100);
     expect(report.paymentSummary.totalUpi).toBe(2500);
     expect(report.paymentSummary.totalCollected).toBe(6600);
+
+    // Overall Totals
+    expect(report.overallSummary.totalBusinessRevenue).toBe(6600);
+    expect(report.overallSummary.totalBusinessProfit).toBe(5600);
+
+    // Repair status workload count
+    expect(report.repairStatusCounts['DELIVERED']).toBe(1);
 
     // Inventory valuation
     expect(report.inventorySummary.totalStockUnits).toBe(60);
