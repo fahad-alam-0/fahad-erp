@@ -11,6 +11,7 @@ import { TechnicianEarningsCard } from '../components/TechnicianEarningsCard';
 import { TechnicianWorkQueue } from '../components/TechnicianWorkQueue';
 import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { DashboardErrorState } from '../components/DashboardErrorState';
+import { DownloadBusinessReportModal } from '@/features/reports/components/DownloadBusinessReportModal';
 import { UserRole } from '@/constants/roles.constants';
 import { useAuthStore } from '@/store/useAuthStore';
 import { formatCurrency } from '@/lib/utils';
@@ -26,6 +27,7 @@ import {
   Store,
   UserCheck,
   ClipboardList,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -33,6 +35,7 @@ export const DashboardPage: React.FC = () => {
   const { data, isLoading, error, refetch } = useDashboardData();
   const { profile } = useAuthStore();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
@@ -82,6 +85,13 @@ export const DashboardPage: React.FC = () => {
     const { metrics } = data;
     return (
       <div className="space-y-6">
+        {/* Download Business Report Modal (Owner Only) */}
+        <DownloadBusinessReportModal
+          isOpen={isReportModalOpen}
+          userRole={UserRole.OWNER}
+          onClose={() => setIsReportModalOpen(false)}
+        />
+
         {/* Personalized Executive Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-2xl bg-card border border-border shadow-2xs">
           <div className="space-y-1">
@@ -98,7 +108,17 @@ export const DashboardPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="shrink-0">
+          <div className="shrink-0 flex items-center space-x-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setIsReportModalOpen(true)}
+              className="flex items-center space-x-2 text-xs font-bold bg-primary text-primary-foreground pressable"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Download Business Report</span>
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
