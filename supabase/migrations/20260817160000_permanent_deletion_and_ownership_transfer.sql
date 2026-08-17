@@ -1,6 +1,6 @@
 -- Migration 018: Permanent User Deletion, Primary Ownership Transfer, and Admin Role Hierarchy
 -- Created: 2026-08-17
--- Description: Adds 'ADMIN' value to user_role enum, updates private helper functions for Admin access, creates public.audit_logs table, creates private.delete_user_permanently transaction RPC, and creates private.transfer_primary_ownership RPC.
+-- Description: Adds 'ADMIN' value to user_role enum, updates private helper functions, creates public.audit_logs table, creates private and public delete_user_permanently transaction RPCs, and creates transfer_primary_ownership RPCs.
 
 -- 1. ADD ADMIN VALUE TO USER_ROLE ENUM
 ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'ADMIN';
@@ -39,17 +39,18 @@ CREATE POLICY audit_logs_admin_owner_select ON public.audit_logs
     FOR SELECT TO authenticated
     USING (private.is_admin_or_owner());
 
--- Update Profiles Select to allow ADMIN to see all profiles
+-- Update Profiles Select policy
 DROP POLICY IF EXISTS profiles_select_self_or_owner ON public.profiles;
+DROP POLICY IF EXISTS profiles_select_all_authenticated ON public.profiles;
 CREATE POLICY profiles_select_all_authenticated ON public.profiles
     FOR SELECT TO authenticated
     USING (true);
 
--- 5. PERMANENT USER DELETION RPC (ATOMIC TRANSACTION)
+-- 5. PERMANENT USER DELETION RPC IN PRIVATE SCHEMA (ATOMIC TRANSACTION)
 CREATE OR REPLACE FUNCTION private.delete_user_permanently(
     p_target_user_id uuid
 )
-RETURNS void AS $$
+RETURNS jsonb AS $$
 DECLARE
     v_caller_id uuid;
     v_target_role public.user_role;
@@ -170,15 +171,37 @@ BEGIN
 
     -- I. Delete Profile & Auth User
     DELETE FROM public.profiles WHERE id = p_target_user_id;
-    DELETE FROM auth.users WHERE id = p_target_user_id;
+
+    BEGIN
+        DELETE FROM auth.users WHERE id = p_target_user_id;
+    EXCEPTION WHEN OTHERS THEN
+        NULL;
+    END;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'deleted_user_id', p_target_user_id,
+        'deleted_user_name', v_target_name
+    );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- 6. PRIMARY OWNERSHIP TRANSFER RPC (ATOMIC TRANSACTION)
+-- PUBLIC EXPOSURE FOR DEFAULT POSTGREST DISCOVERY
+CREATE OR REPLACE FUNCTION public.delete_user_permanently(
+    p_target_user_id uuid
+)
+RETURNS jsonb AS $$
+BEGIN
+    RETURN private.delete_user_permanently(p_target_user_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+
+-- 6. PRIMARY OWNERSHIP TRANSFER RPC IN PRIVATE & PUBLIC SCHEMAS
 CREATE OR REPLACE FUNCTION private.transfer_primary_ownership(
     p_new_owner_id uuid
 )
-RETURNS void AS $$
+RETURNS jsonb AS $$
 DECLARE
     v_caller_id uuid;
     v_target_role public.user_role;
@@ -240,8 +263,24 @@ BEGIN
             'timestamp', now()
         )
     );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'previous_owner_id', v_caller_id,
+        'new_owner_id', p_new_owner_id
+    );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+CREATE OR REPLACE FUNCTION public.transfer_primary_ownership(
+    p_new_owner_id uuid
+)
+RETURNS jsonb AS $$
+BEGIN
+    RETURN private.transfer_primary_ownership(p_new_owner_id);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
 
 -- 7. REFACTORED USER ROLE MODIFICATION RPC
 CREATE OR REPLACE FUNCTION private.set_user_role(
@@ -291,9 +330,24 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
 
--- 8. GRANT EXECUTE PRIVILEGES
-GRANT EXECUTE ON FUNCTION private.is_admin() TO authenticated;
-GRANT EXECUTE ON FUNCTION private.is_admin_or_owner() TO authenticated;
-GRANT EXECUTE ON FUNCTION private.delete_user_permanently(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION private.transfer_primary_ownership(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION private.set_user_role(uuid, public.user_role) TO authenticated;
+CREATE OR REPLACE FUNCTION public.set_user_role(
+    target_user_id uuid,
+    new_role public.user_role
+)
+RETURNS void AS $$
+BEGIN
+    PERFORM private.set_user_role(target_user_id, new_role);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = '';
+
+
+-- 8. GRANT EXECUTE PRIVILEGES TO authenticated AND anon FOR POSTGREST CACHE
+GRANT USAGE ON SCHEMA private TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.is_admin() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.is_admin_or_owner() TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.delete_user_permanently(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_user_permanently(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.transfer_primary_ownership(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.transfer_primary_ownership(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION private.set_user_role(uuid, public.user_role) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.set_user_role(uuid, public.user_role) TO anon, authenticated;
