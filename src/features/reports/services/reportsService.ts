@@ -17,30 +17,29 @@ import {
 export const reportsService = {
   getDateRangeBounds(key: DateRangeKey, customStart?: string, customEnd?: string): { startDate: string; endDate: string; label: string } {
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
 
     if (key === 'TODAY') {
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
       return {
-        startDate: `${todayStr}T00:00:00.000Z`,
-        endDate: `${todayStr}T23:59:59.999Z`,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
         label: 'Today',
       };
     }
 
     if (key === 'YESTERDAY') {
-      const y = new Date();
-      y.setDate(y.getDate() - 1);
-      const yStr = y.toISOString().split('T')[0];
+      const yStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+      const yEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
       return {
-        startDate: `${yStr}T00:00:00.000Z`,
-        endDate: `${yStr}T23:59:59.999Z`,
+        startDate: yStart.toISOString(),
+        endDate: yEnd.toISOString(),
         label: 'Yesterday',
       };
     }
 
     if (key === 'LAST_7_DAYS') {
-      const d = new Date();
-      d.setDate(d.getDate() - 7);
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
       return {
         startDate: d.toISOString(),
         endDate: now.toISOString(),
@@ -49,8 +48,7 @@ export const reportsService = {
     }
 
     if (key === 'LAST_10_DAYS') {
-      const d = new Date();
-      d.setDate(d.getDate() - 10);
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 10, 0, 0, 0, 0);
       return {
         startDate: d.toISOString(),
         endDate: now.toISOString(),
@@ -59,8 +57,7 @@ export const reportsService = {
     }
 
     if (key === 'LAST_30_DAYS') {
-      const d = new Date();
-      d.setDate(d.getDate() - 30);
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0);
       return {
         startDate: d.toISOString(),
         endDate: now.toISOString(),
@@ -69,7 +66,7 @@ export const reportsService = {
     }
 
     if (key === 'LAST_MONTH') {
-      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
       const endLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
       return {
         startDate: startLastMonth.toISOString(),
@@ -79,15 +76,19 @@ export const reportsService = {
     }
 
     if (key === 'CUSTOM' && customStart && customEnd) {
+      const [sYear, sMonth, sDay] = customStart.split('-').map(Number);
+      const [eYear, eMonth, eDay] = customEnd.split('-').map(Number);
+      const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+      const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
       return {
-        startDate: `${customStart}T00:00:00.000Z`,
-        endDate: `${customEnd}T23:59:59.999Z`,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
         label: `${customStart} to ${customEnd}`,
       };
     }
 
     // Default: THIS_MONTH
-    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
     return {
       startDate: startThisMonth.toISOString(),
       endDate: now.toISOString(),

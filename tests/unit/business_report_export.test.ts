@@ -38,8 +38,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
 
     const custom = reportsService.getDateRangeBounds('CUSTOM', '2026-08-01', '2026-08-15');
     expect(custom.label).toBe('2026-08-01 to 2026-08-15');
-    expect(custom.startDate).toContain('2026-08-01');
-    expect(custom.endDate).toContain('2026-08-15');
+    expect(new Date(custom.startDate).toLocaleDateString('en-IN')).toMatch(/1\/8\/2026/);
+    expect(new Date(custom.endDate).toLocaleDateString('en-IN')).toMatch(/15\/8\/2026/);
   });
 
   it('2. Reconciles sales, product costs, repair profits, worker shares, and payment channels', async () => {
@@ -87,11 +87,20 @@ describe('Business Report Generator & Export Unit Tests', () => {
     ];
 
     const mockSnapshots = [
-      { repair_id: 'rep_01', net_repair_profit: 1000, owner_share: 300, technician_share: 700 }
+      {
+        repair_id: 'rep_01',
+        service_revenue: 1500,
+        parts_cost: 500,
+        net_repair_profit: 1000,
+        owner_share: 300,
+        technician_share: 700,
+        technician_id: 'usr_tech_01',
+        technician: { full_name: 'Firoz Technician', role: 'TECHNICIAN' }
+      }
     ];
 
     const mockProducts = [
-      { id: 'prod_01', name: 'Remote Control', product_code: 'REM-01', stock_quantity: 10, current_cost_price: 300, selling_price: 500, min_stock_threshold: 3, category: { name: 'Electronics' }, brand: { name: 'Samsung' } }
+      { id: 'prod_01', name: 'Remote Control', product_code: 'REM-01', stock_quantity: 10, current_cost_price: 300, selling_price: 500, low_stock_threshold: 3, is_active: true, category: { name: 'Electronics' }, brand: { name: 'Samsung' } }
     ];
 
     const mockPurchases = [
@@ -119,7 +128,7 @@ describe('Business Report Generator & Export Unit Tests', () => {
         const order = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
         const lte = vi.fn().mockReturnValue({ order });
         const gte = vi.fn().mockReturnValue({ lte });
-        return { select: vi.fn().mockReturnValue({ gte }) } as any;
+        return { select: vi.fn().mockReturnValue({ gte, in: vi.fn().mockResolvedValue({ data: mockRepairs, error: null }) }) } as any;
       }
       if (table === 'repair_parts') {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockRepairParts, error: null }) }) } as any;
@@ -131,10 +140,12 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }) } as any;
       }
       if (table === 'repair_profit_snapshots') {
-        return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockSnapshots, error: null }) }) } as any;
+        const lte = vi.fn().mockResolvedValue({ data: mockSnapshots, error: null });
+        const gte = vi.fn().mockReturnValue({ lte });
+        return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'products') {
-        return { select: vi.fn().mockResolvedValue({ data: mockProducts, error: null }) } as any;
+        return { select: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: mockProducts, error: null }) }) } as any;
       }
       if (table === 'purchases') {
         const order = vi.fn().mockResolvedValue({ data: mockPurchases, error: null });
