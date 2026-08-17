@@ -588,37 +588,34 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
   exportToExcel(data: DetailedReportData): void {
     const wb = XLSX.utils.book_new();
 
-    // Helper for plain numeric formatting without currency symbols
-    const num = (v: number) => Math.round(v * 100) / 100;
-
-    // Sheet 1: Executive Summary
+    // Sheet 1: Executive Summary (STRICT REQUIREMENT: RAW NUMERIC VALUES for cell formulas =SUM(...))
     const summaryRows = [
       ['FAHAD ELECTRONICS — BUSINESS PERFORMANCE REPORT SUMMARY'],
       ['Reporting Period:', data.periodLabel],
       [],
       ['1. BUSINESS SUMMARY'],
-      ['Sales Revenue (INR):', num(data.salesSummary.totalRevenue)],
-      ['Product Cost Basis (INR):', num(data.salesSummary.totalCost)],
-      ['Product Gross Profit (INR):', num(data.salesSummary.totalProfit)],
-      ['Repair Service Revenue (INR):', num(data.repairSummary.totalServiceRevenue)],
-      ['Repair Parts Cost (INR):', num(data.repairSummary.totalPartsCost)],
-      ['Net Repair Profit (INR):', num(data.repairSummary.netRepairProfit)],
-      ['Owner Repair Share (INR):', num(data.repairSummary.totalOwnerShare)],
-      ['Technician Payout (INR):', num(data.repairSummary.totalTechnicianPayout)],
-      ['TOTAL BUSINESS NET PROFIT (INR):', num(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
+      ['Sales Revenue (INR):', data.salesSummary.totalRevenue],
+      ['Product Cost Basis (INR):', data.salesSummary.totalCost],
+      ['Product Gross Profit (INR):', data.salesSummary.totalProfit],
+      ['Repair Service Revenue (INR):', data.repairSummary.totalServiceRevenue],
+      ['Repair Parts Cost (INR):', data.repairSummary.totalPartsCost],
+      ['Net Repair Profit (INR):', data.repairSummary.netRepairProfit],
+      ['Owner Repair Share (INR):', data.repairSummary.totalOwnerShare],
+      ['Technician Payout (INR):', data.repairSummary.totalTechnicianPayout],
+      ['TOTAL BUSINESS NET PROFIT (INR):', data.salesSummary.totalProfit + data.repairSummary.netRepairProfit],
       [],
       ['2. PAYMENT COLLECTION CHANNELS'],
-      ['Cash Settlement (INR):', num(data.paymentSummary.totalCash)],
-      ['UPI Digital Transfer (INR):', num(data.paymentSummary.totalUpi)],
-      ['Card / POS Machine (INR):', num(data.paymentSummary.totalCard)],
-      ['TOTAL COLLECTION (INR):', num(data.paymentSummary.totalCollected)],
+      ['Cash Settlement (INR):', data.paymentSummary.totalCash],
+      ['UPI Digital Transfer (INR):', data.paymentSummary.totalUpi],
+      ['Card / POS Machine (INR):', data.paymentSummary.totalCard],
+      ['TOTAL COLLECTION (INR):', data.paymentSummary.totalCollected],
       [],
       ['3. CURRENT INVENTORY VALUATION'],
       ['Active Products in Catalog:', data.inventorySummary.totalActiveProducts],
       ['Total Stock Units:', data.inventorySummary.totalStockUnits],
-      ['Current Inventory Cost Value (INR):', num(data.inventorySummary.currentInventoryValue)],
-      ['Potential Sales Value (INR):', num(data.inventorySummary.potentialSalesValue)],
-      ['Potential Gross Margin (INR):', num(data.inventorySummary.potentialGrossMargin)],
+      ['Current Inventory Cost Value (INR):', data.inventorySummary.currentInventoryValue],
+      ['Potential Sales Value (INR):', data.inventorySummary.potentialSalesValue],
+      ['Potential Gross Margin (INR):', data.inventorySummary.potentialGrossMargin],
     ];
 
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
@@ -631,11 +628,11 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       s.productName,
       s.sku,
       s.quantity,
-      num(s.unitCost),
-      num(s.unitPrice),
-      num(s.totalCost),
-      num(s.totalRevenue),
-      num(s.actualProfit),
+      s.unitCost,
+      s.unitPrice,
+      s.totalCost,
+      s.totalRevenue,
+      s.actualProfit,
       s.customerName,
       s.paymentMethod,
     ]);
@@ -651,16 +648,16 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       r.deviceInfo,
       r.workerName,
       r.workerRole,
-      num(r.serviceRevenue),
-      num(r.partsCost),
-      num(r.netProfit),
-      num(r.ownerShare),
-      num(r.technicianShare),
-      num(r.amountCollected),
+      r.serviceRevenue,
+      r.partsCost,
+      r.netProfit,
+      r.ownerShare,
+      r.technicianShare,
+      r.amountCollected,
       r.status,
     ]);
     const wsRepairs = XLSX.utils.aoa_to_sheet([repairHeader, ...repairDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repair Service');
+    XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repair Performance');
 
     // Sheet 4: Worker Performance
     const workerHeader = ['Worker Name', 'Role', 'Completed Repairs', 'Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)'];
@@ -668,11 +665,11 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       w.workerName,
       w.workerRole,
       w.completedRepairs,
-      num(w.serviceRevenue),
-      num(w.partsCost),
-      num(w.netProfit),
-      num(w.ownerShare),
-      num(w.technicianShare),
+      w.serviceRevenue,
+      w.partsCost,
+      w.netProfit,
+      w.ownerShare,
+      w.technicianShare,
     ]);
     const wsWorker = XLSX.utils.aoa_to_sheet([workerHeader, ...workerDataRows]);
     XLSX.utils.book_append_sheet(wb, wsWorker, 'Worker Performance');
@@ -685,13 +682,13 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       i.categoryName,
       i.brandName,
       i.stockQuantity,
-      num(i.costPrice),
-      num(i.sellingPrice),
-      num(i.inventoryValue),
+      i.costPrice,
+      i.sellingPrice,
+      i.inventoryValue,
       i.status,
     ]);
     const wsInv = XLSX.utils.aoa_to_sheet([invHeader, ...invDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsInv, 'Inventory Catalog');
+    XLSX.utils.book_append_sheet(wb, wsInv, 'Inventory');
 
     // Sheet 6: Purchases
     const purHeader = ['Purchase Date', 'PO #', 'Supplier Name', 'Product Purchased', 'Qty', 'Unit Cost (INR)', 'Line Cost (INR)', 'PO Discount (INR)', 'Final PO Amount (INR)', 'Payment Status'];
@@ -701,10 +698,10 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       p.supplierName,
       p.productName,
       p.quantity,
-      num(p.unitCost),
-      num(p.totalCost),
-      num(p.discount),
-      num(p.finalAmount),
+      p.unitCost,
+      p.totalCost,
+      p.discount,
+      p.finalAmount,
       p.paymentStatus,
     ]);
     const wsPur = XLSX.utils.aoa_to_sheet([purHeader, ...purDataRows]);
