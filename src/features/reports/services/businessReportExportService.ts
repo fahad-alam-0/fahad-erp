@@ -87,6 +87,7 @@ export interface DetailedReportData {
     totalStockUnits: number;
     currentInventoryValue: number;
     potentialSalesValue: number;
+    potentialGrossMargin: number;
     lowStockCount: number;
     outOfStockCount: number;
   };
@@ -168,33 +169,32 @@ export const businessReportExportService = {
     const salesList = sales || [];
     const saleIds = salesList.map((s) => s.id);
 
-    // Fetch sale payments
-    let salePaymentsMap: Record<string, string[]> = {};
+    // Primary sales revenue sum directly from sales table for 100% reconciliation with Dashboard & Reports
+    const totalSalesRevenueFromSalesTable = salesList.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+
+    // Fetch sale payments for period
     let posCash = 0, posUpi = 0, posCard = 0;
-    let payData: any[] = [];
+    const { data: posPayments } = await supabase
+      .from('sale_payments')
+      .select('sale_id, payment_method, amount, created_at')
+      .gte('created_at', startInclusive)
+      .lt('created_at', endExclusive);
 
-    if (saleIds.length > 0) {
-      const { data: pData } = await supabase
-        .from('sale_payments')
-        .select('sale_id, payment_method, amount')
-        .in('sale_id', saleIds);
+    const salePaymentsMap: Record<string, string[]> = {};
+    (posPayments || []).forEach((p: any) => {
+      const amt = Number(p.amount || 0);
+      if (p.payment_method === 'CASH') posCash += amt;
+      if (p.payment_method === 'UPI') posUpi += amt;
+      if (p.payment_method === 'CARD') posCard += amt;
 
-      payData = pData || [];
-      payData.forEach((p: any) => {
-        const amt = Number(p.amount || 0);
-        if (p.payment_method === 'CASH') posCash += amt;
-        if (p.payment_method === 'UPI') posUpi += amt;
-        if (p.payment_method === 'CARD') posCard += amt;
-
-        if (!salePaymentsMap[p.sale_id]) salePaymentsMap[p.sale_id] = [];
-        salePaymentsMap[p.sale_id].push(p.payment_method);
-      });
-    }
+      if (!salePaymentsMap[p.sale_id]) salePaymentsMap[p.sale_id] = [];
+      salePaymentsMap[p.sale_id].push(p.payment_method);
+    });
 
     // Fetch sale items using historical unit_cost_price
     let salesItemsDetailed: DetailedReportData['salesItems'] = [];
     let totalSalesCost = 0;
-    let totalSalesRevenue = 0;
+    let totalSalesRevenueFromItems = 0;
 
     if (saleIds.length > 0) {
       const { data: items } = await supabase
@@ -224,7 +224,7 @@ export const businessReportExportService = {
         const lineProfit = lineRev - lineCost;
 
         totalSalesCost += lineCost;
-        totalSalesRevenue += lineRev;
+        totalSalesRevenueFromItems += lineRev;
 
         salesItemsDetailed.push({
           date: meta?.date || '',
@@ -243,6 +243,7 @@ export const businessReportExportService = {
       });
     }
 
+    const totalSalesRevenue = totalSalesRevenueFromSalesTable > 0 ? totalSalesRevenueFromSalesTable : totalSalesRevenueFromItems;
     const totalSalesProfit = totalSalesRevenue - totalSalesCost;
 
     // --------------------------------------------------
@@ -259,7 +260,7 @@ export const businessReportExportService = {
 
     const snapsList = snapData || [];
 
-    // Also fetch tickets created/received in period for new tickets count
+    // Tickets created/received in period
     const { data: periodRepairs } = await supabase
       .from('repair_jobs')
       .select('id, repair_number, status, payment_status, created_at')
@@ -269,10 +270,8 @@ export const businessReportExportService = {
     const periodRepairList = periodRepairs || [];
     const newTicketsCount = periodRepairList.length;
 
-    // Gather repair IDs from snapshots for parts and payments
-    const snapshotRepairIds = snapsList.map((s: any) => s.repair_id).filter(Boolean);
-
     // Fetch repair parts for snapshot repairs
+    const snapshotRepairIds = snapsList.map((s: any) => s.repair_id).filter(Boolean);
     const repairPartsMap = new Map<string, number>();
     if (snapshotRepairIds.length > 0) {
       const { data: partsData } = await supabase
@@ -286,32 +285,31 @@ export const businessReportExportService = {
       });
     }
 
-    // Fetch repair payments & payment channels
+    // Fetch repair payments collected in period (gte startInclusive AND lt endExclusive)
     let repairCash = 0, repairUpi = 0, repairCard = 0;
     const repairPaymentsCollectedMap = new Map<string, number>();
     const repairPaymentMethodsMap = new Map<string, string[]>();
-    let rPayData: any[] = [];
 
-    if (snapshotRepairIds.length > 0) {
-      const { data: rpData } = await supabase
-        .from('repair_payments')
-        .select('repair_id, payment_method, amount')
-        .in('repair_id', snapshotRepairIds);
+    const { data: rPayData } = await supabase
+      .from('repair_payments')
+      .select('repair_id, payment_method, amount, created_at')
+      .gte('created_at', startInclusive)
+      .lt('created_at', endExclusive);
 
-      rPayData = rpData || [];
-      rPayData.forEach((p: any) => {
-        const amt = Number(p.amount || 0);
-        if (p.payment_method === 'CASH') repairCash += amt;
-        if (p.payment_method === 'UPI') repairUpi += amt;
-        if (p.payment_method === 'CARD') repairCard += amt;
+    (rPayData || []).forEach((p: any) => {
+      const amt = Number(p.amount || 0);
+      if (p.payment_method === 'CASH') repairCash += amt;
+      if (p.payment_method === 'UPI') repairUpi += amt;
+      if (p.payment_method === 'CARD') repairCard += amt;
 
+      if (p.repair_id) {
         const curAmt = repairPaymentsCollectedMap.get(p.repair_id) || 0;
         repairPaymentsCollectedMap.set(p.repair_id, curAmt + amt);
 
         if (!repairPaymentMethodsMap.has(p.repair_id)) repairPaymentMethodsMap.set(p.repair_id, []);
         repairPaymentMethodsMap.get(p.repair_id)!.push(p.payment_method);
-      });
-    }
+      }
+    });
 
     // Process repair summary, items, and worker performance directly from profit snapshots
     let totalServiceRev = 0;
@@ -457,6 +455,8 @@ export const businessReportExportService = {
       });
     });
 
+    const potentialGrossMargin = potentialSalesValue - currentInventoryValue;
+
     // --------------------------------------------------
     // 4. FETCH PURCHASES (gte startInclusive AND lt endExclusive)
     // --------------------------------------------------
@@ -502,19 +502,19 @@ export const businessReportExportService = {
       });
     });
 
-    // Phase 15 Debug Log Trace
+    // Debug Log Trace
     console.log(`========== BUSINESS REPORT EXPORT DEBUG ==========
 REPORT RANGE: ${periodLabel}
 startInclusive: ${startInclusive}
 endExclusive: ${endExclusive}
 TIMEZONE: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 
-SALES: rowCount=${salesList.length}, revenue=${totalSalesRevenue}
-REPAIRS: rowCount=${snapsList.length}, revenue=${totalServiceRev}, partsCost=${totalRepairPartsCost}
+SALES: rowCount=${salesList.length}, revenue=${totalSalesRevenue}, cost=${totalSalesCost}, profit=${totalSalesProfit}
+REPAIRS: rowCount=${snapsList.length}, revenue=${totalServiceRev}, partsCost=${totalRepairPartsCost}, profit=${totalNetRepairProfit}
 PROFIT SNAPSHOTS: rowCount=${snapsList.length}, ownerShare=${totalOwnerRepairShare}, techShare=${totalTechRepairPayout}
-PAYMENTS: rowCount=${payData.length + rPayData.length}, cash=${posCash + repairCash}, upi=${posUpi + repairUpi}, card=${posCard + repairCard}
+PAYMENTS: posCash=${posCash}, posUpi=${posUpi}, posCard=${posCard}, repairCash=${repairCash}, repairUpi=${repairUpi}, repairCard=${repairCard}, total=${posCash + repairCash + posUpi + repairUpi + posCard + repairCard}
 WORKERS: rowCount=${workerPerfList.length}
-INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits}, inventoryValue=${currentInventoryValue}
+INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits}, inventoryValue=${currentInventoryValue}, potentialSalesValue=${potentialSalesValue}
 ==================================================`);
 
     return {
@@ -562,6 +562,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
         totalStockUnits,
         currentInventoryValue,
         potentialSalesValue,
+        potentialGrossMargin,
         lowStockCount,
         outOfStockCount,
       },
@@ -589,49 +590,58 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
 
     // Sheet 1: Executive Summary
     const summaryRows = [
-      ['FAHAD ELECTRONICS — BUSINESS REPORT EXECUTIVE SUMMARY'],
+      ['FAHAD ELECTRONICS — BUSINESS PERFORMANCE REPORT SUMMARY'],
       ['Reporting Period:', data.periodLabel],
       [],
-      ['SALES SUMMARY'],
+      ['1. SALES SUMMARY'],
       ['Total Completed Sales:', data.salesSummary.salesCount],
-      ['Total Sales Revenue:', data.salesSummary.totalRevenue],
-      ['Total Product Cost:', data.salesSummary.totalCost],
-      ['Total Product Gross Profit:', data.salesSummary.totalProfit],
+      ['Total Sales Revenue (INR):', data.salesSummary.totalRevenue],
+      ['Total Product Cost (INR):', data.salesSummary.totalCost],
+      ['Total Product Gross Profit (INR):', data.salesSummary.totalProfit],
       [],
-      ['REPAIR SERVICE SUMMARY'],
+      ['2. REPAIR SERVICE SUMMARY'],
       ['New Repair Tickets Intake:', data.repairSummary.newTicketsCount],
       ['Completed / Delivered Repairs:', data.repairSummary.completedCount],
-      ['Total Repair Service Revenue:', data.repairSummary.totalServiceRevenue],
-      ['Total Repair Parts Cost:', data.repairSummary.totalPartsCost],
-      ['Net Repair Profit:', data.repairSummary.netRepairProfit],
-      ['Owner Repair Profit Share:', data.repairSummary.totalOwnerShare],
-      ['Technician Payout Share:', data.repairSummary.totalTechnicianPayout],
+      ['Total Repair Service Revenue (INR):', data.repairSummary.totalServiceRevenue],
+      ['Total Repair Parts Cost (INR):', data.repairSummary.totalPartsCost],
+      ['Net Repair Profit (INR):', data.repairSummary.netRepairProfit],
+      ['Owner Repair Profit Share (INR):', data.repairSummary.totalOwnerShare],
+      ['Technician Payout Share (INR):', data.repairSummary.totalTechnicianPayout],
       [],
-      ['OVERALL BUSINESS NET PROFIT'],
-      ['Combined Business Net Profit:', data.salesSummary.totalProfit + data.repairSummary.netRepairProfit],
+      ['3. PAYMENT COLLECTION CHANNELS'],
+      ['POS Cash Collected (INR):', data.paymentSummary.posCash],
+      ['POS UPI Collected (INR):', data.paymentSummary.posUpi],
+      ['POS Card Collected (INR):', data.paymentSummary.posCard],
+      ['Repair Cash Collected (INR):', data.paymentSummary.repairCash],
+      ['Repair UPI Collected (INR):', data.paymentSummary.repairUpi],
+      ['Repair Card Collected (INR):', data.paymentSummary.repairCard],
+      ['TOTAL CASH SETTLEMENT (INR):', data.paymentSummary.totalCash],
+      ['TOTAL UPI SETTLEMENT (INR):', data.paymentSummary.totalUpi],
+      ['TOTAL CARD SETTLEMENT (INR):', data.paymentSummary.totalCard],
+      ['TOTAL BUSINESS COLLECTION (INR):', data.paymentSummary.totalCollected],
       [],
-      ['PAYMENT COLLECTION CHANNELS'],
-      ['Cash Collected:', data.paymentSummary.totalCash],
-      ['UPI Collected:', data.paymentSummary.totalUpi],
-      ['Card Collected:', data.paymentSummary.totalCard],
-      ['Total Settlement:', data.paymentSummary.totalCollected],
+      ['4. OVERALL BUSINESS NET PROFIT'],
+      ['Product Gross Profit (INR):', data.salesSummary.totalProfit],
+      ['Net Repair Profit (INR):', data.repairSummary.netRepairProfit],
+      ['TOTAL BUSINESS NET PROFIT (INR):', data.salesSummary.totalProfit + data.repairSummary.netRepairProfit],
+      ['OWNER RETAINED PROFIT SHARE (INR):', data.salesSummary.totalProfit + data.repairSummary.totalOwnerShare],
+      ['TECHNICIAN PAYOUT SHARE (INR):', data.repairSummary.totalTechnicianPayout],
       [],
-      ['CURRENT INVENTORY VALUATION'],
+      ['5. CURRENT INVENTORY VALUATION'],
       ['Active Products:', data.inventorySummary.totalActiveProducts],
       ['Total Stock Units:', data.inventorySummary.totalStockUnits],
-      ['Current Inventory Cost Value:', data.inventorySummary.currentInventoryValue],
-      ['Potential Sales Value:', data.inventorySummary.potentialSalesValue],
+      ['Current Inventory Cost Value (INR):', data.inventorySummary.currentInventoryValue],
+      ['Potential Sales Value (INR):', data.inventorySummary.potentialSalesValue],
+      ['Potential Gross Margin (INR):', data.inventorySummary.potentialGrossMargin],
     ];
 
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
 
-    // Sheet 2: Itemized Sales
-    const salesHeader = ['Date', 'Sale #', 'Customer Name', 'Product Name', 'SKU', 'Qty', 'Unit Cost (₹)', 'Unit Price (₹)', 'Total Cost (₹)', 'Total Revenue (₹)', 'Actual Profit (₹)', 'Payment Method'];
+    // Sheet 2: Itemized Sales (Shows Product Name prominently)
+    const salesHeader = ['Date', 'Product Name', 'SKU', 'Qty', 'Unit Cost (INR)', 'Unit Price (INR)', 'Total Cost (INR)', 'Total Revenue (INR)', 'Actual Profit (INR)', 'Customer Name', 'Payment Method'];
     const salesDataRows = data.salesItems.map((s) => [
       s.date,
-      s.saleNumber,
-      s.customerName,
       s.productName,
       s.sku,
       s.quantity,
@@ -640,13 +650,14 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       s.totalCost,
       s.totalRevenue,
       s.actualProfit,
+      s.customerName,
       s.paymentMethod,
     ]);
     const wsSales = XLSX.utils.aoa_to_sheet([salesHeader, ...salesDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsSales, 'Sales');
+    XLSX.utils.book_append_sheet(wb, wsSales, 'Sales Performance');
 
     // Sheet 3: Itemized Repairs
-    const repairHeader = ['Date', 'Job Ticket #', 'Customer Name', 'Device', 'Assigned Worker', 'Role', 'Service Revenue (₹)', 'Parts Cost (₹)', 'Net Profit (₹)', 'Owner Share (₹)', 'Tech Share (₹)', 'Amount Collected (₹)', 'Status'];
+    const repairHeader = ['Date', 'Job Ticket #', 'Customer Name', 'Device', 'Assigned Worker', 'Role', 'Service Revenue (INR)', 'Parts Cost (INR)', 'Net Profit (INR)', 'Owner Share (INR)', 'Tech Share (INR)', 'Amount Collected (INR)', 'Status'];
     const repairDataRows = data.repairItems.map((r) => [
       r.repairDate,
       r.ticketNumber,
@@ -663,10 +674,10 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
       r.status,
     ]);
     const wsRepairs = XLSX.utils.aoa_to_sheet([repairHeader, ...repairDataRows]);
-    XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repairs');
+    XLSX.utils.book_append_sheet(wb, wsRepairs, 'Repair Service');
 
     // Sheet 4: Worker Performance
-    const workerHeader = ['Worker Name', 'Role', 'Completed Repairs', 'Service Revenue (₹)', 'Parts Cost (₹)', 'Net Repair Profit (₹)', 'Owner Share (₹)', 'Technician Payout (₹)'];
+    const workerHeader = ['Worker Name', 'Role', 'Completed Repairs', 'Service Revenue (INR)', 'Parts Cost (INR)', 'Net Repair Profit (INR)', 'Owner Share (INR)', 'Technician Payout (INR)'];
     const workerDataRows = data.workerPerformance.map((w) => [
       w.workerName,
       w.workerRole,
@@ -681,7 +692,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     XLSX.utils.book_append_sheet(wb, wsWorker, 'Worker Performance');
 
     // Sheet 5: Inventory Catalog
-    const invHeader = ['Product Name', 'SKU', 'Category', 'Brand', 'Stock Qty', 'Cost Price (₹)', 'Selling Price (₹)', 'Total Cost Value (₹)', 'Stock Status'];
+    const invHeader = ['Product Name', 'SKU', 'Category', 'Brand', 'Stock Qty', 'Cost Price (INR)', 'Selling Price (INR)', 'Total Cost Value (INR)', 'Stock Status'];
     const invDataRows = data.inventoryItems.map((i) => [
       i.productName,
       i.sku,
@@ -697,7 +708,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     XLSX.utils.book_append_sheet(wb, wsInv, 'Inventory Catalog');
 
     // Sheet 6: Purchases
-    const purHeader = ['Purchase Date', 'PO #', 'Supplier Name', 'Product Purchased', 'Qty', 'Unit Cost (₹)', 'Line Cost (₹)', 'PO Discount (₹)', 'Final PO Amount (₹)', 'Payment Status'];
+    const purHeader = ['Purchase Date', 'PO #', 'Supplier Name', 'Product Purchased', 'Qty', 'Unit Cost (INR)', 'Line Cost (INR)', 'PO Discount (INR)', 'Final PO Amount (INR)', 'Payment Status'];
     const purDataRows = data.purchaseItems.map((p) => [
       p.purchaseDate,
       p.purchaseNumber,
@@ -714,7 +725,8 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     XLSX.utils.book_append_sheet(wb, wsPur, 'Purchases');
 
     // Save Workbook
-    const filename = `FAHAD_ERP_Business_Report_${data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`;
+    const cleanLabel = data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `FAHAD_ELECTRONICS_Business_Report_${cleanLabel}.xlsx`;
     XLSX.writeFile(wb, filename);
   },
 
@@ -737,13 +749,13 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     doc.text(`Reporting Period: ${data.periodLabel}`, 14, currentY);
     currentY += 8;
 
-    // Helper for currency formatting
-    const fmt = (num: number) => `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Helper for safe PDF currency formatting using "INR" to prevent font encoding corruption (e.g. ¹)
+    const fmt = (num: number) => `INR ${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // 1. BUSINESS SUMMARY TABLE
+    // 1. EXECUTIVE BUSINESS SUMMARY
     autoTable(doc, {
       startY: currentY,
-      head: [['1. BUSINESS SUMMARY', 'Metric / Count Description', 'Amount (INR)']],
+      head: [['1. EXECUTIVE BUSINESS SUMMARY', 'Metric / Count Description', 'Amount (INR)']],
       body: [
         ['Sales Revenue', `${data.salesSummary.salesCount} Completed POS Sales`, fmt(data.salesSummary.totalRevenue)],
         ['Product Cost Basis', 'Historical unit cost at sale time', fmt(data.salesSummary.totalCost)],
@@ -765,7 +777,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     // 2. PAYMENT COLLECTION CHANNELS
     autoTable(doc, {
       startY: currentY,
-      head: [['2. PAYMENT COLLECTION CHANNELS', 'POS Sales (₹)', 'Repair Payments (₹)', 'Total Collected (₹)']],
+      head: [['2. PAYMENT COLLECTION CHANNELS', 'POS Sales Collection', 'Repair Collection', 'Total Collected']],
       body: [
         ['Cash Settlement', fmt(data.paymentSummary.posCash), fmt(data.paymentSummary.repairCash), fmt(data.paymentSummary.totalCash)],
         ['UPI Digital Transfer', fmt(data.paymentSummary.posUpi), fmt(data.paymentSummary.repairUpi), fmt(data.paymentSummary.totalUpi)],
@@ -786,15 +798,16 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
           w.workerRole,
           w.completedRepairs.toString(),
           fmt(w.serviceRevenue),
+          fmt(w.partsCost),
           fmt(w.netProfit),
           fmt(w.ownerShare),
           fmt(w.technicianShare),
         ])
-      : [['No finalized repair worker activity for this period', '-', '0', fmt(0), fmt(0), fmt(0), fmt(0)]];
+      : [['No finalized repair worker activity for this period', '-', '0', fmt(0), fmt(0), fmt(0), fmt(0), fmt(0)]];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['3. WORKER REPAIR PERFORMANCE', 'Role', 'Completed', 'Revenue', 'Net Profit', 'Owner Share', 'Tech Share']],
+      head: [['3. WORKER REPAIR PERFORMANCE', 'Role', 'Completed', 'Revenue', 'Parts Cost', 'Net Profit', 'Owner Share', 'Tech Share']],
       body: workerRows,
       theme: 'grid',
       headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: 'bold' },
@@ -812,7 +825,7 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
         ['Total Stock Units', data.inventorySummary.totalStockUnits.toString()],
         ['Current Inventory Cost Value', fmt(data.inventorySummary.currentInventoryValue)],
         ['Potential Sales Value', fmt(data.inventorySummary.potentialSalesValue)],
-        ['Potential Inventory Gross Margin', fmt(data.inventorySummary.potentialSalesValue - data.inventorySummary.currentInventoryValue)],
+        ['Potential Inventory Gross Profit', fmt(data.inventorySummary.potentialGrossMargin)],
         ['Low Stock Alerts', data.inventorySummary.lowStockCount.toString()],
         ['Out of Stock Items', data.inventorySummary.outOfStockCount.toString()],
       ],
@@ -823,14 +836,14 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
 
     currentY = (doc as any).lastAutoTable.finalY + 8;
 
-    // 5. BUSINESS PROFIT SUMMARY
+    // 5. FINAL BUSINESS PROFIT SUMMARY
     autoTable(doc, {
       startY: currentY,
-      head: [['5. BUSINESS PROFIT SUMMARY', 'Amount (INR)']],
+      head: [['5. FINAL BUSINESS PROFIT SUMMARY', 'Amount (INR)']],
       body: [
-        ['Sales Gross Profit', fmt(data.salesSummary.totalProfit)],
-        ['Repair Net Profit', fmt(data.repairSummary.netRepairProfit)],
-        ['TOTAL BUSINESS PROFIT', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
+        ['Product Gross Profit', fmt(data.salesSummary.totalProfit)],
+        ['Net Repair Profit', fmt(data.repairSummary.netRepairProfit)],
+        ['TOTAL BUSINESS NET PROFIT', fmt(data.salesSummary.totalProfit + data.repairSummary.netRepairProfit)],
         ['OWNER RETAINED PROFIT SHARE', fmt(data.salesSummary.totalProfit + data.repairSummary.totalOwnerShare)],
         ['TECHNICIAN PAYOUT SHARE', fmt(data.repairSummary.totalTechnicianPayout)],
       ],
@@ -840,7 +853,8 @@ INVENTORY: productCount=${(products || []).length}, stockUnits=${totalStockUnits
     });
 
     // Save PDF
-    const filename = `FAHAD_ERP_Business_Report_${data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    const cleanLabel = data.periodLabel.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `FAHAD_ELECTRONICS_Business_Report_${cleanLabel}.pdf`;
     doc.save(filename);
   },
 };

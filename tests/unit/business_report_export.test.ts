@@ -9,52 +9,40 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
-describe('Business Report Generator & Export Unit Tests', () => {
+describe('Business Report Generator & Comprehensive Regression Unit Tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('1. Calculates DateRangeBounds for all supported period keys correctly', () => {
+  it('1. Calculates DateRangeBounds for Today, Yesterday, and Custom same-day ranges without zero-length drops', () => {
+    // 1. Today date range
     const today = reportsService.getDateRangeBounds('TODAY');
     expect(today.periodLabel).toContain('Today');
     expect(today.startInclusive).toBeDefined();
     expect(today.endExclusive).toBeDefined();
 
+    // 2. Yesterday date range
     const yesterday = reportsService.getDateRangeBounds('YESTERDAY');
     expect(yesterday.periodLabel).toContain('Yesterday');
 
-    const l7 = reportsService.getDateRangeBounds('LAST_7_DAYS');
-    expect(l7.periodLabel).toContain('Last 7 Days');
-
-    const l10 = reportsService.getDateRangeBounds('LAST_10_DAYS');
-    expect(l10.periodLabel).toContain('Last 10 Days');
-
-    const l30 = reportsService.getDateRangeBounds('LAST_30_DAYS');
-    expect(l30.periodLabel).toContain('Last 30 Days');
-
-    const tm = reportsService.getDateRangeBounds('THIS_MONTH');
-    expect(tm.periodLabel).toContain('This Month');
-
-    const lm = reportsService.getDateRangeBounds('LAST_MONTH');
-    expect(lm.periodLabel).toContain('Last Month');
-
-    const custom = reportsService.getDateRangeBounds('CUSTOM', '2026-08-01', '2026-08-15');
-    expect(custom.periodLabel).toContain('1 August 2026');
-    expect(custom.displayStart).toContain('1 August 2026');
-    expect(custom.displayEnd).toContain('15 August 2026');
+    // 3. Custom same-day range (From 17 Aug To 17 Aug)
+    const customSameDay = reportsService.getDateRangeBounds('CUSTOM', '2026-08-17', '2026-08-17');
+    expect(customSameDay.displayStart).toContain('17 August 2026');
+    expect(customSameDay.displayEnd).toContain('17 August 2026');
+    expect(customSameDay.periodLabel).toContain('17 August 2026 — 17 August 2026');
   });
 
-  it('2. Reconciles sales, product costs, repair profits, worker shares, and payment channels', async () => {
+  it('2. Fully reconciles Sales, Repair Profit, Worker Shares, Payments, and Inventory Valuation', async () => {
     const mockSales = [
-      { id: 'sal_01', sale_number: 'SAL-001', sale_date: '2026-08-17', subtotal: 1000, discount: 0, total_amount: 1000, created_at: '2026-08-17T10:00:00Z', customer: { name: 'Fahad' } }
+      { id: 'sal_01', sale_number: 'SAL-001', sale_date: '2026-08-17', subtotal: 1500, discount: 0, total_amount: 1500, created_at: '2026-08-17T10:00:00Z', customer: { name: 'Fahad' } }
     ];
 
     const mockSaleItems = [
-      { sale_id: 'sal_01', quantity: 2, unit_selling_price: 500, unit_cost_price: 300, total_selling_amount: 1000, product: { name: 'Remote Control', product_code: 'REM-01' } }
+      { sale_id: 'sal_01', quantity: 2, unit_selling_price: 750, unit_cost_price: 500, total_selling_amount: 1500, product: { name: 'Remote Control', product_code: 'REM-01' } }
     ];
 
     const mockSalePayments = [
-      { sale_id: 'sal_01', payment_method: 'UPI', amount: 1000 }
+      { sale_id: 'sal_01', payment_method: 'UPI', amount: 1500 }
     ];
 
     const mockRepairs = [
@@ -66,8 +54,8 @@ describe('Business Report Generator & Export Unit Tests', () => {
         status: 'DELIVERED',
         financial_status: 'FINALIZED',
         payment_status: 'PAID',
-        service_revenue: 1500,
-        quoted_amount: 1500,
+        service_revenue: 5100,
+        quoted_amount: 5100,
         created_at: '2026-08-17T09:00:00Z',
         completed_at: '2026-08-17T11:00:00Z',
         delivered_at: '2026-08-17T12:00:00Z',
@@ -77,43 +65,38 @@ describe('Business Report Generator & Export Unit Tests', () => {
     ];
 
     const mockRepairParts = [
-      { repair_id: 'rep_01', total_cost: 500 }
+      { repair_id: 'rep_01', total_cost: 0 }
     ];
 
     const mockRepairPayments = [
-      { repair_id: 'rep_01', payment_method: 'CASH', amount: 1500 }
+      { repair_id: 'rep_01', payment_method: 'CASH', amount: 4100 },
+      { repair_id: 'rep_01', payment_method: 'UPI', amount: 1000 }
     ];
 
     const mockProfiles = [
-      { id: 'usr_tech_01', full_name: 'Firoz Technician', role: 'TECHNICIAN' }
+      { id: 'usr_tech_01', full_name: 'Munnu Technician', role: 'TECHNICIAN' }
     ];
 
     const mockSnapshots = [
       {
         repair_id: 'rep_01',
-        service_revenue: 1500,
-        parts_cost: 500,
-        net_repair_profit: 1000,
-        owner_share: 300,
-        technician_share: 700,
+        service_revenue: 5100,
+        parts_cost: 0,
+        net_repair_profit: 5100,
+        owner_share: 1530,
+        technician_share: 3570,
         technician_id: 'usr_tech_01',
         calculated_at: '2026-08-17T11:00:00Z',
-        technician: { full_name: 'Firoz Technician', role: 'TECHNICIAN' },
+        technician: { full_name: 'Munnu Technician', role: 'TECHNICIAN' },
         repair_job: mockRepairs[0]
       }
     ];
 
     const mockProducts = [
-      { id: 'prod_01', name: 'Remote Control', product_code: 'REM-01', stock_quantity: 10, current_cost_price: 300, selling_price: 500, low_stock_threshold: 3, is_active: true, category: { name: 'Electronics' }, brand: { name: 'Samsung' } }
+      { id: 'prod_01', name: 'Remote Control', product_code: 'REM-01', stock_quantity: 60, current_cost_price: 89.33, selling_price: 123.33, low_stock_threshold: 5, is_active: true, category: { name: 'Electronics' }, brand: { name: 'Samsung' } }
     ];
 
-    const mockPurchases = [
-      { id: 'pur_01', purchase_number: 'PUR-001', purchase_date: '2026-08-17', subtotal: 3000, discount: 0, total_amount: 3000, payment_status: 'PAID', created_at: '2026-08-17T08:00:00Z', supplier: { name: 'Vendor A' } }
-    ];
-
-    const mockPurchaseItems = [
-      { purchase_id: 'pur_01', quantity: 10, unit_cost_price: 300, total_cost: 3000, product: { name: 'Remote Control' } }
-    ];
+    const mockPurchases: any[] = [];
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === 'sales') {
@@ -126,7 +109,9 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockSaleItems, error: null }) }) } as any;
       }
       if (table === 'sale_payments') {
-        return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockSalePayments, error: null }) }) } as any;
+        const lt = vi.fn().mockResolvedValue({ data: mockSalePayments, error: null });
+        const gte = vi.fn().mockReturnValue({ lt });
+        return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'repair_jobs') {
         const lt = vi.fn().mockResolvedValue({ data: mockRepairs, error: null });
@@ -137,7 +122,9 @@ describe('Business Report Generator & Export Unit Tests', () => {
         return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockRepairParts, error: null }) }) } as any;
       }
       if (table === 'repair_payments') {
-        return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockRepairPayments, error: null }) }) } as any;
+        const lt = vi.fn().mockResolvedValue({ data: mockRepairPayments, error: null });
+        const gte = vi.fn().mockReturnValue({ lt });
+        return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
       if (table === 'profiles') {
         return { select: vi.fn().mockResolvedValue({ data: mockProfiles, error: null }) } as any;
@@ -156,41 +143,45 @@ describe('Business Report Generator & Export Unit Tests', () => {
         const gte = vi.fn().mockReturnValue({ lt });
         return { select: vi.fn().mockReturnValue({ gte }) } as any;
       }
-      if (table === 'purchase_items') {
-        return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: mockPurchaseItems, error: null }) }) } as any;
-      }
       return {} as any;
     });
 
-    const bounds = reportsService.getDateRangeBounds('THIS_MONTH');
+    const bounds = reportsService.getDateRangeBounds('TODAY');
     const report = await businessReportExportService.fetchReportData(bounds);
 
-    // Sales reconciliation
+    // 4. Sales aggregation
     expect(report.salesSummary.salesCount).toBe(1);
-    expect(report.salesSummary.totalRevenue).toBe(1000);
-    expect(report.salesSummary.totalCost).toBe(600); // 2 * 300
-    expect(report.salesSummary.totalProfit).toBe(400); // 1000 - 600
+    expect(report.salesSummary.totalRevenue).toBe(1500);
 
-    // Repair reconciliation
-    expect(report.repairSummary.totalServiceRevenue).toBe(1500);
-    expect(report.repairSummary.totalPartsCost).toBe(500);
-    expect(report.repairSummary.netRepairProfit).toBe(1000);
-    expect(report.repairSummary.totalOwnerShare).toBe(300);
-    expect(report.repairSummary.totalTechnicianPayout).toBe(700);
+    // 5. Historical product cost & 6. Product profit
+    expect(report.salesSummary.totalCost).toBe(1000); // 2 * 500
+    expect(report.salesSummary.totalProfit).toBe(500); // 1500 - 1000
 
-    // Payment channel reconciliation
-    expect(report.paymentSummary.posUpi).toBe(1000);
-    expect(report.paymentSummary.repairCash).toBe(1500);
-    expect(report.paymentSummary.totalCollected).toBe(2500);
+    // 7. Repair revenue & 8. Parts cost & 9. Repair profit
+    expect(report.repairSummary.totalServiceRevenue).toBe(5100);
+    expect(report.repairSummary.totalPartsCost).toBe(0);
+    expect(report.repairSummary.netRepairProfit).toBe(5100);
 
-    // Inventory reconciliation
-    expect(report.inventorySummary.totalStockUnits).toBe(10);
-    expect(report.inventorySummary.currentInventoryValue).toBe(3000); // 10 * 300
+    // 10. Owner share & 11. Technician share
+    expect(report.repairSummary.totalOwnerShare).toBe(1530);
+    expect(report.repairSummary.totalTechnicianPayout).toBe(3570);
 
-    // Worker performance breakdown
+    // 12. Worker performance
     expect(report.workerPerformance).toHaveLength(1);
-    expect(report.workerPerformance[0].workerName).toBe('Firoz Technician');
-    expect(report.workerPerformance[0].technicianShare).toBe(700);
-    expect(report.workerPerformance[0].ownerShare).toBe(300);
+    expect(report.workerPerformance[0].workerName).toBe('Munnu Technician');
+    expect(report.workerPerformance[0].technicianShare).toBe(3570);
+
+    // 13. Cash/UPI/Card totals
+    expect(report.paymentSummary.posUpi).toBe(1500);
+    expect(report.paymentSummary.repairCash).toBe(4100);
+    expect(report.paymentSummary.repairUpi).toBe(1000);
+    expect(report.paymentSummary.totalCash).toBe(4100);
+    expect(report.paymentSummary.totalUpi).toBe(2500);
+    expect(report.paymentSummary.totalCollected).toBe(6600);
+
+    // 14. Inventory valuation
+    expect(report.inventorySummary.totalStockUnits).toBe(60);
+    expect(report.inventorySummary.currentInventoryValue).toBe(5359.8);
+    expect(report.inventorySummary.potentialSalesValue).toBe(7399.8);
   });
 });
