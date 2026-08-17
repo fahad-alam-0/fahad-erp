@@ -146,4 +146,40 @@ describe('Combobox UX & Inventory/Repair Bug Fix Unit Tests', () => {
     expect(mockEq).not.toHaveBeenCalledWith('category_id', 'ALL');
     expect(mockEq).not.toHaveBeenCalledWith('brand_id', 'ALL');
   });
+
+  it('8. Successfully creates product via inventoryService.createProduct for OWNER, ADMIN, and STAFF', async () => {
+    const mockProduct = {
+      id: 'prod_123',
+      name: 'Samsung LED TV 32"',
+      category_id: 'cat_01',
+      brand_id: 'brd_01',
+      selling_price: 15000,
+      current_cost_price: 10000,
+      stock_quantity: 5,
+      low_stock_threshold: 2,
+      unit: 'pcs',
+      is_active: true,
+    };
+
+    const mockSingle = vi.fn().mockResolvedValue({ data: mockProduct, error: null });
+    const mockSelect = vi.fn().mockReturnValue({ single: mockSingle });
+    const mockInsert = vi.fn().mockReturnValue({ select: mockSelect });
+
+    vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert } as any);
+
+    const result = await inventoryService.createProduct({
+      name: 'Samsung LED TV 32"',
+      category_id: 'cat_01',
+      brand_id: 'brd_01',
+      selling_price: 15000,
+      current_cost_price: 10000,
+      stock_quantity: 5,
+      low_stock_threshold: 2,
+      unit: 'pcs',
+    });
+
+    expect(supabase.from).toHaveBeenCalledWith('products');
+    expect(result.id).toBe('prod_123');
+    expect(result.name).toBe('Samsung LED TV 32"');
+  });
 });
