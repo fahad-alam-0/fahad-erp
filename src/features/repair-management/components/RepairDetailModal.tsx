@@ -12,11 +12,9 @@ import {
   X,
   Wrench,
   User,
-  Calendar,
   Loader2,
   Package,
   Banknote,
-  DollarSign,
   UserCheck,
   RefreshCw,
   Plus,
@@ -56,7 +54,6 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   const isOwner = userRole === 'OWNER';
-  const isTechnician = userRole === 'TECHNICIAN';
   const isStaff = userRole === 'STAFF';
 
   const loadJobData = async (id: string) => {
@@ -153,7 +150,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Workspace Toolbar */}
+        {/* Workspace Action Toolbar */}
         <div className="p-3 bg-muted/20 border-b border-border flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center space-x-2">
             {/* Take Repair Claim Button */}
@@ -169,13 +166,13 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
-            {/* Update Status Button (Available to OWNER, STAFF, and Assigned Technician on non-terminal tickets) */}
-            {!isTerminal && (isOwner || isStaff || isAssignedToMe) && (
+            {/* Update Status Button (ALWAYS VISIBLE for any non-terminal ticket) */}
+            {!isTerminal && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => setIsStatusModalOpen(true)}
-                className="h-8 text-xs pressable flex items-center gap-1.5"
+                className="h-8 text-xs pressable flex items-center gap-1.5 bg-background hover:bg-accent text-foreground font-bold shadow-2xs border-primary/40 text-primary"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-primary" />
                 <span>Update Status</span>
@@ -183,7 +180,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
             )}
 
             {/* Assign Tech (Owner only) */}
-            {isOwner && !isTerminal && !isFinalized && (
+            {isOwner && !isTerminal && (
               <Button
                 size="sm"
                 variant="outline"
@@ -208,8 +205,8 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
-            {/* Collect / Record Payment (Available to STAFF, OWNER, and Assigned TECH on non-terminal, unfinalized tickets) */}
-            {!isTerminal && !isFinalized && (isOwner || isStaff || isAssignedToMe) && remainingDueAmount > 0 && (
+            {/* Collect / Record Payment (Available when remaining due > 0) */}
+            {!isTerminal && remainingDueAmount > 0 && (
               <Button
                 size="sm"
                 onClick={() => setIsPaymentModalOpen(true)}
@@ -300,43 +297,30 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                       SN/IMEI: {displayJob.serial_number}
                     </p>
                   )}
-                  <p className="text-muted-foreground font-mono text-[11px] pt-1">
-                    Received:{' '}
-                    {new Date(displayJob.received_at).toLocaleDateString('en-IN', {
-                      month: 'short',
-                      day: '2-digit',
-                      year: 'numeric',
-                    })}
+                  <p className="text-muted-foreground font-mono text-[10px] pt-1">
+                    Received: {new Date(displayJob.received_at).toLocaleDateString()}
                   </p>
                 </div>
               </div>
 
-              {/* Reported Problem & Revenue Overview */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2 p-3.5 bg-card rounded-xl border border-border space-y-1 text-xs">
-                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">
+              {/* Reported Problem & Revenue Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 p-3.5 bg-card rounded-xl border border-border space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Reported Problem Description
                   </span>
-                  <p className="font-medium text-foreground">{displayJob.reported_problem}</p>
-                  {displayJob.intake_notes && (
-                    <p className="text-[11px] text-muted-foreground italic pt-1">
-                      Intake Notes: {displayJob.intake_notes}
-                    </p>
-                  )}
+                  <p className="text-xs text-foreground font-medium whitespace-pre-wrap">
+                    {displayJob.reported_problem || 'N/A'}
+                  </p>
                 </div>
 
-                <div className="p-3.5 bg-card rounded-xl border border-border space-y-1 text-xs font-mono">
-                  <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block font-sans">
+                <div className="p-3.5 bg-card rounded-xl border border-border flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Quoted Service Revenue
                   </span>
-                  <p className="text-lg font-extrabold text-primary">
+                  <p className="text-lg font-bold font-mono text-primary mt-1">
                     {formatCurrency(displayJob.service_revenue, 'INR')}
                   </p>
-                  {displayJob.discount > 0 && (
-                    <p className="text-[10px] text-emerald-600 dark:text-emerald-400">
-                      Discount: -{formatCurrency(displayJob.discount, 'INR')}
-                    </p>
-                  )}
                 </div>
               </div>
 
@@ -410,7 +394,7 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                   </span>
                   <span className="font-mono font-bold text-foreground text-[11px]">
                     Collected: {formatCurrency(paymentsTotalAmount, 'INR')} / Due:{' '}
-                    {formatCurrency(displayJob.service_revenue, 'INR')}
+                    {formatCurrency(remainingDueAmount, 'INR')}
                   </span>
                 </div>
 
@@ -454,161 +438,97 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Status Timeline History Audit Log */}
+              {/* Status Audit History Timeline */}
               <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-primary" />
-                  <span>Status Transition History Log</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Status Audit History ({displayJob.repair_status_history?.length || 0})
                 </span>
-
-                <div className="p-3 bg-muted/20 rounded-xl border border-border space-y-2 max-h-36 overflow-y-auto">
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {displayJob.repair_status_history && displayJob.repair_status_history.length > 0 ? (
                     displayJob.repair_status_history.map((hist) => (
-                      <div key={hist.id} className="text-xs flex items-center justify-between font-mono">
+                      <div
+                        key={hist.id}
+                        className="p-2.5 bg-muted/20 border border-border/70 rounded-lg flex items-center justify-between text-xs font-mono"
+                      >
                         <div className="flex items-center space-x-2">
-                          <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                          <span className="font-semibold text-foreground">
-                            {hist.old_status ? `${hist.old_status} → ` : ''}{hist.new_status}
-                          </span>
+                          <span className="text-muted-foreground">{hist.old_status || 'CREATED'}</span>
+                          <span className="text-muted-foreground font-bold">→</span>
+                          <span className="text-primary font-bold">{hist.new_status}</span>
                           {hist.notes && (
-                            <span className="text-muted-foreground font-sans text-[11px]">
+                            <span className="text-muted-foreground font-sans text-[11px] ml-2">
                               ({hist.notes})
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-muted-foreground">
-                          {new Date(hist.created_at).toLocaleString('en-IN', {
-                            month: 'short',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
+                        <div className="text-[10px] text-muted-foreground text-right">
+                          <span className="block font-semibold text-foreground font-sans">
+                            {hist.changed_by_profile?.full_name || 'System User'}
+                          </span>
+                          <span>{new Date(hist.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-[11px] text-muted-foreground">No history logged yet.</p>
+                    <p className="text-xs text-muted-foreground italic">No status history recorded yet.</p>
                   )}
                 </div>
               </div>
-
-              {/* ROLE-GATED PROFIT SNAPSHOT BOX */}
-              {!isStaff && displayJob.repair_profit_snapshots && (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-xs font-mono">
-                  <div className="flex items-center justify-between border-b border-emerald-500/20 pb-2">
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400 font-sans flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4" />
-                      <span>Financially Finalized Profit Snapshot</span>
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      Finalized by Owner
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block uppercase font-sans">
-                        Service Revenue
-                      </span>
-                      <span className="font-bold text-foreground">
-                        {formatCurrency(displayJob.repair_profit_snapshots.service_revenue, 'INR')}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block uppercase font-sans">
-                        Parts Cost
-                      </span>
-                      <span className="font-bold text-destructive">
-                        -{formatCurrency(displayJob.repair_profit_snapshots.parts_cost, 'INR')}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-muted-foreground block uppercase font-sans">
-                        Net Profit
-                      </span>
-                      <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(displayJob.repair_profit_snapshots.net_repair_profit, 'INR')}
-                      </span>
-                    </div>
-
-                    {isOwner && (
-                      <div>
-                        <span className="text-[10px] text-muted-foreground block uppercase font-sans">
-                          Owner Share ({displayJob.repair_profit_snapshots.owner_percentage}%)
-                        </span>
-                        <span className="font-bold text-primary">
-                          {formatCurrency(displayJob.repair_profit_snapshots.owner_share, 'INR')}
-                        </span>
-                      </div>
-                    )}
-
-                    {(isOwner || (isTechnician && displayJob.technician_id === userId)) && (
-                      <div>
-                        <span className="text-[10px] text-muted-foreground block uppercase font-sans">
-                          Tech Share ({displayJob.repair_profit_snapshots.technician_percentage}%)
-                        </span>
-                        <span className="font-bold text-sky-500">
-                          {formatCurrency(displayJob.repair_profit_snapshots.technician_share, 'INR')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
-
-        {/* Modals */}
-        <AssignTechnicianModal
-          isOpen={isAssignModalOpen}
-          repairId={displayJob.id}
-          currentTechnicianId={displayJob.technician_id}
-          onClose={() => setIsAssignModalOpen(false)}
-          onSuccess={() => {
-            loadJobData(displayJob.id);
-            onRefresh();
-          }}
-        />
-
-        <UpdateStatusModal
-          isOpen={isStatusModalOpen}
-          repairId={displayJob.id}
-          currentStatus={displayJob.status}
-          isOwner={isOwner}
-          serviceRevenue={displayJob.service_revenue}
-          paymentsTotalAmount={paymentsTotalAmount}
-          onClose={() => setIsStatusModalOpen(false)}
-          onSuccess={() => {
-            loadJobData(displayJob.id);
-            onRefresh();
-          }}
-        />
-
-        <AddRepairPartModal
-          isOpen={isPartModalOpen}
-          repairId={displayJob.id}
-          onClose={() => setIsPartModalOpen(false)}
-          onSuccess={() => {
-            loadJobData(displayJob.id);
-            onRefresh();
-          }}
-        />
-
-        <AddRepairPaymentModal
-          isOpen={isPaymentModalOpen}
-          repairId={displayJob.id}
-          serviceRevenue={displayJob.service_revenue}
-          existingPaymentsTotal={paymentsTotalAmount}
-          onClose={() => setIsPaymentModalOpen(false)}
-          onSuccess={() => {
-            loadJobData(displayJob.id);
-            onRefresh();
-          }}
-        />
       </div>
+
+      {/* Action Modals */}
+      <AssignTechnicianModal
+        isOpen={isAssignModalOpen}
+        repairId={displayJob.id}
+        currentTechnicianId={displayJob.technician_id}
+        onClose={() => setIsAssignModalOpen(false)}
+        onSuccess={async () => {
+          setIsAssignModalOpen(false);
+          await loadJobData(displayJob.id);
+          onRefresh();
+        }}
+      />
+
+      <UpdateStatusModal
+        isOpen={isStatusModalOpen}
+        repairId={displayJob.id}
+        currentStatus={displayJob.status}
+        isOwner={isOwner}
+        serviceRevenue={displayJob.service_revenue}
+        paymentsTotalAmount={paymentsTotalAmount}
+        onClose={() => setIsStatusModalOpen(false)}
+        onSuccess={async () => {
+          setIsStatusModalOpen(false);
+          await loadJobData(displayJob.id);
+          onRefresh();
+        }}
+      />
+
+      <AddRepairPartModal
+        isOpen={isPartModalOpen}
+        repairId={displayJob.id}
+        onClose={() => setIsPartModalOpen(false)}
+        onSuccess={async () => {
+          setIsPartModalOpen(false);
+          await loadJobData(displayJob.id);
+          onRefresh();
+        }}
+      />
+
+      <AddRepairPaymentModal
+        isOpen={isPaymentModalOpen}
+        repairId={displayJob.id}
+        serviceRevenue={displayJob.service_revenue}
+        existingPaymentsTotal={paymentsTotalAmount}
+        onClose={() => setIsPaymentModalOpen(false)}
+        onSuccess={async () => {
+          setIsPaymentModalOpen(false);
+          await loadJobData(displayJob.id);
+          onRefresh();
+        }}
+      />
     </div>
   );
 };
