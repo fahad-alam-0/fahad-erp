@@ -142,7 +142,7 @@ export const reportsService = {
   async getSalesAnalytics(startDate: string, endDate: string): Promise<SalesAnalytics> {
     const { data: sales, error: salesErr } = await supabase
       .from('sales')
-      .select('id, sale_number, sale_date, subtotal, discount, total_amount, created_at')
+      .select('id, sale_number, sale_date, subtotal, discount, total_amount, created_at, created_by, creator:profiles!sales_created_by_fkey(id, full_name, role)')
       .gte('created_at', startDate)
       .lt('created_at', endDate)
       .order('created_at', { ascending: true });
@@ -156,6 +156,50 @@ export const reportsService = {
     const salesCount = salesList.length;
     const totalRevenue = salesList.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
     const avgSaleValue = salesCount > 0 ? totalRevenue / salesCount : 0;
+
+    // Sales by Role & User Breakdown
+    const roleMap: Record<string, { amount: number; count: number }> = {
+      OWNER: { amount: 0, count: 0 },
+      ADMIN: { amount: 0, count: 0 },
+      STAFF: { amount: 0, count: 0 },
+      TECHNICIAN: { amount: 0, count: 0 },
+    };
+    const userMap: Record<string, { userName: string; userRole: any; amount: number; count: number }> = {};
+
+    salesList.forEach((s: any) => {
+      const amt = Number(s.total_amount || 0);
+      const roleName = (s.creator?.role || 'STAFF') as 'OWNER' | 'ADMIN' | 'STAFF' | 'TECHNICIAN';
+      if (roleMap[roleName]) {
+        roleMap[roleName].amount += amt;
+        roleMap[roleName].count += 1;
+      }
+
+      const uid = s.created_by || 'unknown';
+      if (!userMap[uid]) {
+        userMap[uid] = {
+          userName: s.creator?.full_name || 'Staff User',
+          userRole: roleName,
+          amount: 0,
+          count: 0,
+        };
+      }
+      userMap[uid].amount += amt;
+      userMap[uid].count += 1;
+    });
+
+    const salesByRoleBreakdown = Object.keys(roleMap).map((role) => ({
+      role: role as any,
+      amount: roleMap[role].amount,
+      count: roleMap[role].count,
+    }));
+
+    const salesByUserBreakdown = Object.keys(userMap).map((uid) => ({
+      userId: uid,
+      userName: userMap[uid].userName,
+      userRole: userMap[uid].userRole,
+      amount: userMap[uid].amount,
+      count: userMap[uid].count,
+    }));
 
     // Daily trend
     const trendMap: Record<string, { revenue: number; count: number }> = {};
@@ -297,6 +341,8 @@ export const reportsService = {
       avgSaleValue,
       salesTrend,
       paymentMethodBreakdown,
+      salesByRoleBreakdown,
+      salesByUserBreakdown,
       topProducts,
       productProfitability,
     };
@@ -521,9 +567,17 @@ export const reportsService = {
     return {
       statusCounts,
       activeRepairsCount,
+      completedCount: statusCounts['DELIVERED'] || 0,
       readyForPickupCount,
       pendingFinancialsCount,
+      totalRevenue: totalRepairRevenue,
       totalRepairRevenue,
+      partsCost: 0,
+      netProfit: totalRepairRevenue,
+      technicianPayout: 0,
+      ownerShare: totalRepairRevenue,
+      amountCollected: totalRepairRevenue,
+      amountPending: 0,
     };
   },
 
@@ -572,13 +626,18 @@ export const reportsService = {
     }));
 
     return {
+      totalRevenue: salesRevenue + repairRevenue,
       salesRevenue,
-      purchaseValue,
+      salesCostOfGoods: 0,
+      grossSalesProfit: salesRevenue,
       repairRevenue,
       repairPartsCost,
       netRepairProfit,
-      ownerRepairShare,
       technicianRepairShare,
+      ownerRepairShare,
+      totalExpenses: 0,
+      netBusinessProfit: salesRevenue + ownerRepairShare,
+      purchaseValue,
       technicianEarningsSummary,
     };
   },

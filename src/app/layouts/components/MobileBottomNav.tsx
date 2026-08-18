@@ -14,6 +14,7 @@ export const MobileBottomNav: React.FC = () => {
       case UserRole.TECHNICIAN:
         return [
           { label: 'Home', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
+          { label: 'POS', path: ROUTES.SALES, icon: ShoppingCart },
           { label: 'My Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
           { label: 'Stock', path: ROUTES.INVENTORY.ROOT, icon: Package },
           { label: 'Profile', path: ROUTES.PROFILE, icon: User },

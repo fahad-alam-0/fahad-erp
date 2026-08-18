@@ -28,12 +28,28 @@ export interface ProductProfitabilitySummary {
   products: ProductProfitabilityItem[];
 }
 
+export interface SalesByRoleItem {
+  role: 'OWNER' | 'ADMIN' | 'STAFF' | 'TECHNICIAN';
+  amount: number;
+  count: number;
+}
+
+export interface SalesByUserItem {
+  userId: string;
+  userName: string;
+  userRole: 'OWNER' | 'ADMIN' | 'STAFF' | 'TECHNICIAN';
+  amount: number;
+  count: number;
+}
+
 export interface SalesAnalytics {
   totalRevenue: number;
   salesCount: number;
   avgSaleValue: number;
   salesTrend: { date: string; revenue: number; count: number }[];
   paymentMethodBreakdown: { method: 'CASH' | 'UPI' | 'CARD'; amount: number; count: number }[];
+  salesByRoleBreakdown: SalesByRoleItem[];
+  salesByUserBreakdown: SalesByUserItem[];
   topProducts: { id: string; name: string; code: string | null; qtySold: number; revenue: number }[];
   productProfitability: ProductProfitabilitySummary;
 }
@@ -78,44 +94,58 @@ export interface InventoryAnalytics {
 export interface RepairAnalytics {
   statusCounts: Record<string, number>;
   activeRepairsCount: number;
+  completedCount: number;
   readyForPickupCount: number;
   pendingFinancialsCount: number;
+  totalRevenue: number;
   totalRepairRevenue: number;
+  partsCost: number;
+  netProfit: number;
+  technicianPayout: number;
+  ownerShare: number;
+  amountCollected: number;
+  amountPending: number;
 }
 
 export interface OwnerFinancialOverview {
+  totalRevenue: number;
   salesRevenue: number;
-  purchaseValue: number;
+  salesCostOfGoods: number;
+  grossSalesProfit: number;
   repairRevenue: number;
   repairPartsCost: number;
   netRepairProfit: number;
-  ownerRepairShare: number;
   technicianRepairShare: number;
-  technicianEarningsSummary: { techId: string; techName: string; completedJobs: number; techShare: number }[];
+  ownerRepairShare: number;
+  totalExpenses: number;
+  netBusinessProfit: number;
+  purchaseValue: number;
+  technicianEarningsSummary: any[];
 }
 
 export interface WorkerServicePerformance {
   workerId: string;
   workerName: string;
-  workerRole: 'OWNER' | 'TECHNICIAN' | 'STAFF';
+  workerRole: 'OWNER' | 'ADMIN' | 'TECHNICIAN' | 'STAFF';
   servicesCompleted: number;
   serviceRevenue: number;
   partsCost: number;
   netProfit: number;
   ownerShare: number;
   technicianShare: number;
+  financialStatus?: 'SETTLED' | 'UNSETTLED';
 }
 
 export interface RepairServicePerformanceReport {
   totalRepairsCompleted: number;
-  ownerRepairsCount: number;
-  technicianRepairsCount: number;
   totalServiceRevenue: number;
   totalPartsCost: number;
   totalNetProfit: number;
   totalOwnerShare: number;
   totalTechnicianPayout: number;
-  ownerPerformance: WorkerServicePerformance | null;
+  ownerRepairsCount: number;
+  technicianRepairsCount: number;
+  ownerPerformance?: WorkerServicePerformance | null;
   technicianPerformances: WorkerServicePerformance[];
   allWorkersComparison: WorkerServicePerformance[];
 }
