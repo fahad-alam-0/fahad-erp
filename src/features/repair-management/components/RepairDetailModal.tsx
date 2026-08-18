@@ -169,8 +169,8 @@ export const RepairDetailModal: React.FC<RepairDetailModalProps> = ({
               </Button>
             )}
 
-            {/* Update Status Button (Assigned worker or Owner) */}
-            {!isTerminal && !isFinalized && (isOwner || isAssignedToMe) && (
+            {/* Update Status Button (Available to OWNER, STAFF, and Assigned Technician on non-terminal tickets) */}
+            {!isTerminal && (isOwner || isStaff || isAssignedToMe) && (
               <Button
                 size="sm"
                 variant="outline"
