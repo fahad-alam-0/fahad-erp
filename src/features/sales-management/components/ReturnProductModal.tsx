@@ -4,6 +4,7 @@ import { salesService } from '../services/salesService';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { RotateCcw, X, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { env } from '@/config/env';
 
 interface ReturnProductModalProps {
   isOpen: boolean;
@@ -131,6 +132,9 @@ export const ReturnProductModal: React.FC<ReturnProductModalProps> = ({
                 Customer: {sale.customer?.full_name || 'Walk-in Customer'} • Date:{' '}
                 {new Date(sale.sale_date).toLocaleDateString('en-IN')}
               </p>
+              <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                Runtime DB: {env.VITE_SUPABASE_URL}
+              </div>
             </div>
           </div>
           <button
