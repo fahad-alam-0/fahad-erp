@@ -203,7 +203,7 @@ export const salesService = {
     return_number: string;
     total_refund_amount: number;
   }> {
-    const { data, error } = await supabase.schema('private').rpc('process_sale_return', {
+    let res = await supabase.schema('private').rpc('process_sale_return', {
       p_sale_id: input.sale_id,
       p_refund_method: input.refund_method,
       p_refund_reference: input.refund_reference || null,
@@ -212,12 +212,23 @@ export const salesService = {
       p_items: input.items,
     });
 
-    if (error) {
-      console.error('Error executing process_sale_return RPC:', error);
-      throw new Error(error.message || 'Failed to process sale return.');
+    if (res.error && res.error.message.toLowerCase().includes('schema')) {
+      res = await supabase.rpc('process_sale_return', {
+        p_sale_id: input.sale_id,
+        p_refund_method: input.refund_method,
+        p_refund_reference: input.refund_reference || null,
+        p_reason: input.reason,
+        p_reason_notes: input.reason_notes || null,
+        p_items: input.items,
+      });
     }
 
-    return data;
+    if (res.error) {
+      console.error('Error executing process_sale_return RPC:', res.error);
+      throw new Error(res.error.message || 'Failed to process sale return.');
+    }
+
+    return res.data;
   },
 
   async getSaleReturns(params?: { search?: string }): Promise<SaleReturn[]> {
