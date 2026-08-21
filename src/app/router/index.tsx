@@ -18,7 +18,6 @@ import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { CustomersPage } from '@/features/customer-management/pages/CustomersPage';
 
 import { InventoryPage } from '@/features/inventory-management/pages/InventoryPage';
-import { ProductsPage } from '@/features/inventory-management/products/pages/ProductsPage';
 import { StockPage } from '@/features/inventory-management/stock/pages/StockPage';
 import { CategoriesPage } from '@/features/inventory-management/categories/pages/CategoriesPage';
 import { BrandsPage } from '@/features/inventory-management/brands/pages/BrandsPage';
@@ -68,7 +67,7 @@ const router = createBrowserRouter([
 
               // Inventory Sub-routes
               { path: ROUTES.INVENTORY.ROOT, element: <InventoryPage /> },
-              { path: ROUTES.INVENTORY.PRODUCTS, element: <ProductsPage /> },
+              { path: ROUTES.INVENTORY.PRODUCTS, element: <InventoryPage /> },
               { path: ROUTES.INVENTORY.STOCK, element: <StockPage /> },
               { path: ROUTES.INVENTORY.CATEGORIES, element: <CategoriesPage /> },
               { path: ROUTES.INVENTORY.BRANDS, element: <BrandsPage /> },

@@ -33,8 +33,7 @@ export const Sidebar: React.FC = () => {
           items: [
             { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
             { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-            { label: 'Products', path: ROUTES.INVENTORY.PRODUCTS, icon: Package },
-            { label: 'Inventory Stock', path: ROUTES.INVENTORY.STOCK, icon: Package },
+            { label: 'Products & Stock', path: ROUTES.INVENTORY.ROOT, icon: Package },
             { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
             { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
             { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
