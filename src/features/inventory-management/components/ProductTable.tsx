@@ -3,13 +3,14 @@ import { Product } from '../types/inventory.types';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/badges/StatusBadge';
 import { formatCurrency } from '@/lib/utils';
-import { Eye, Edit, Sliders, Package, Tag } from 'lucide-react';
+import { Eye, Edit, Sliders, Package, Tag, Trash2 } from 'lucide-react';
 
 interface ProductTableProps {
   products: Product[];
   onViewDetails: (product: Product) => void;
   onEdit: (product: Product) => void;
   onAdjustStock: (product: Product) => void;
+  onDelete?: (product: Product) => void;
   userRole?: string;
 }
 
@@ -18,6 +19,7 @@ export const ProductTable: React.FC<ProductTableProps> = ({
   onViewDetails,
   onEdit,
   onAdjustStock,
+  onDelete,
   userRole = 'OWNER',
 }) => {
   const isTechnician = userRole === 'TECHNICIAN';
@@ -144,6 +146,17 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                       >
                         <Edit className="w-3.5 h-3.5" />
                       </Button>
+                      {!isTechnician && onDelete && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDelete(prod)}
+                          className="h-8 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 pressable"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -274,6 +287,16 @@ export const ProductTable: React.FC<ProductTableProps> = ({
                   >
                     <Edit className="w-3.5 h-3.5" />
                   </Button>
+                  {!isTechnician && onDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(prod)}
+                      className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10 pressable"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>

@@ -296,6 +296,30 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Dynamic Profit & Margin Calculation Display */}
+            {(() => {
+              const sellNum = Number(sellingPrice) || 0;
+              const costNum = Number(currentCostPrice) || 0;
+              const profitVal = sellNum - costNum;
+              const marginVal = sellNum > 0 ? ((profitVal / sellNum) * 100).toFixed(1) : '0.0';
+              return (
+                <div className="p-2.5 rounded-lg bg-muted/40 border border-border flex items-center justify-between text-xs font-mono">
+                  <div>
+                    <span className="text-[10px] text-muted-foreground uppercase font-sans font-semibold block">Estimated Unit Profit</span>
+                    <span className={`font-bold ${profitVal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                      ₹{profitVal.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-muted-foreground uppercase font-sans font-semibold block">Profit Margin</span>
+                    <span className={`font-bold ${profitVal >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                      {marginVal}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Inventory Limits */}

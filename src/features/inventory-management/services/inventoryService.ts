@@ -236,6 +236,34 @@ export const inventoryService = {
     return data;
   },
 
+  async deleteProduct(id: string): Promise<void> {
+    const [salesCheck, purchasesCheck, returnsCheck, repairsCheck] = await Promise.all([
+      supabase.from('sale_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+      supabase.from('purchase_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+      supabase.from('sale_return_items').select('id', { count: 'exact', head: true }).eq('product_id', id),
+      supabase.from('repair_parts').select('id', { count: 'exact', head: true }).eq('product_id', id),
+    ]);
+
+    const hasSales = (salesCheck.count || 0) > 0;
+    const hasPurchases = (purchasesCheck.count || 0) > 0;
+    const hasReturns = (returnsCheck.count || 0) > 0;
+    const hasRepairs = (repairsCheck.count || 0) > 0;
+
+    if (hasSales || hasPurchases || hasReturns || hasRepairs) {
+      throw new Error('This product cannot be permanently deleted because it has historical transaction records.');
+    }
+
+    // Clean up initial ledger movements before deleting unused product
+    await supabase.from('inventory_movements').delete().eq('product_id', id);
+
+    const { error } = await supabase.from('products').delete().eq('id', id);
+
+    if (error) {
+      console.error('Error deleting product:', error);
+      throw new Error(error.message || 'Failed to delete product.');
+    }
+  },
+
   async adjustStock(
     arg1: string | { product_id: string; movement_type: string; quantity: number; unit_cost?: number; notes?: string },
     arg2?: number,

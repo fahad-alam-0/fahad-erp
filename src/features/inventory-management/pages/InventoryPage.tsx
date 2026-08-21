@@ -5,6 +5,7 @@ import { ProductTable } from '../components/ProductTable';
 import { ProductFormModal } from '../components/ProductFormModal';
 import { StockAdjustmentModal } from '../components/StockAdjustmentModal';
 import { ProductDetailDrawer } from '../components/ProductDetailDrawer';
+import { DeleteProductModal } from '../components/DeleteProductModal';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { SkeletonPlaceholder } from '@/components/loading/SkeletonPlaceholder';
@@ -52,6 +53,9 @@ export const InventoryPage: React.FC = () => {
 
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
+
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -154,6 +158,17 @@ export const InventoryPage: React.FC = () => {
   const handleViewDetailsClick = (p: Product) => {
     setSelectedProductForDetail(p);
     setIsDetailDrawerOpen(true);
+  };
+
+  const handleDeleteClick = (p: Product) => {
+    setDeletingProduct(p);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async (p: Product) => {
+    await inventoryService.deleteProduct(p.id);
+    setIsDeleteModalOpen(false);
+    loadProducts();
   };
 
   const handleSaveProduct = async (input: CreateProductInput | UpdateProductInput) => {
@@ -391,6 +406,7 @@ export const InventoryPage: React.FC = () => {
           onEdit={handleEditClick}
           onAdjustStock={handleAdjustStockClick}
           onViewDetails={handleViewDetailsClick}
+          onDelete={handleDeleteClick}
           userRole={userRole}
         />
       )}
@@ -405,6 +421,14 @@ export const InventoryPage: React.FC = () => {
         onSave={handleSaveProduct}
         onCategoryCreated={(newCat) => setCategories((prev) => [...prev, newCat])}
         onBrandCreated={(newBrand) => setBrands((prev) => [...prev, newBrand])}
+      />
+
+      {/* Delete Product Modal */}
+      <DeleteProductModal
+        isOpen={isDeleteModalOpen}
+        product={deletingProduct}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirmDelete={handleConfirmDelete}
       />
 
       {/* Stock Adjustment Modal */}
