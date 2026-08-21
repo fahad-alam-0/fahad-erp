@@ -121,4 +121,5 @@ export interface CreateRepairJobInput {
   quoted_amount?: number;
   discount?: number;
   technician_id?: string;
+  problem_tags?: string[];
 }

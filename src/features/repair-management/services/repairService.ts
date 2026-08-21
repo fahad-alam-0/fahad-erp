@@ -225,6 +225,7 @@ export const repairService = {
       p_quoted_amount: input.quoted_amount ?? null,
       p_discount: input.discount ?? 0,
       p_technician_id: input.technician_id || null,
+      p_problem_tags: input.problem_tags || [],
     });
 
     if (error) {
