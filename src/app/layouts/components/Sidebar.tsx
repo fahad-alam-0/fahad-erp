@@ -33,7 +33,7 @@ export const Sidebar: React.FC = () => {
           items: [
             { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
             { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-            { label: 'Products & Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
+            { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
             { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
             { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
             { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
@@ -57,7 +57,7 @@ export const Sidebar: React.FC = () => {
           items: [
             { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
             { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-            { label: 'Products & Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
+            { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
             { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
             { label: 'My Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
             { label: 'My Account', path: ROUTES.PROFILE, icon: User },
@@ -72,7 +72,7 @@ export const Sidebar: React.FC = () => {
         items: [
           { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
           { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-          { label: 'Products & Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
+          { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
           { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
           { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
           { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },

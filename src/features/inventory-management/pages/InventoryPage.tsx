@@ -205,7 +205,7 @@ export const InventoryPage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <PageHeader
-        title="Products & Stock Catalog"
+        title="Inventory Catalog & Products"
         subtitle="Manage product catalog, prices, weighted-average cost basis, and live monetary inventory value."
         actions={
           <Button onClick={handleAddProductClick} className="flex items-center gap-2">
