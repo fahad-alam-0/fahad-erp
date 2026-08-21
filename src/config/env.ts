@@ -4,8 +4,8 @@ const envSchema = z.object({
   VITE_APP_TITLE: z.string().default('Fahad ERP'),
   VITE_APP_VERSION: z.string().default('1.0.0'),
   VITE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
-  VITE_SUPABASE_URL: z.string().url().default('https://bcqwbhrivxhhswvpbcwt.supabase.co'),
-  VITE_SUPABASE_ANON_KEY: z.string().min(1).default('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjcXdiaHJpdnhoaHN3dnBiY3d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNDEyNTksImV4cCI6MjEwMjYxNzI1OX0.3LKmJ1n9tf7AFLrQxRytHY1zFCJwW4WVwh_TLMGLZPA'),
+  VITE_SUPABASE_URL: z.string().url().default('https://spyvffxlqcpdbbnoohsz.supabase.co'),
+  VITE_SUPABASE_ANON_KEY: z.string().min(1).default('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNweXZmZnhscWNwZGJibm9vaHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNzgxODMsImV4cCI6MjEwMTc1NDE4M30._s7wVp4Yi9R3nipVdWbjtevNOeceh_wy0UvAO7RiQjM'),
   VITE_ENABLE_MULTI_STORE: z.string().transform((val) => val === 'true').default('false'),
   VITE_DEFAULT_STORE_ID: z.string().default('store_fahad_01'),
 });
@@ -29,8 +29,8 @@ const parseEnv = () => {
       VITE_APP_TITLE: 'Fahad ERP',
       VITE_APP_VERSION: '1.0.0',
       VITE_ENV: 'development' as const,
-      VITE_SUPABASE_URL: 'https://bcqwbhrivxhhswvpbcwt.supabase.co',
-      VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJjcXdiaHJpdnhoaHN3dnBiY3d0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcwNDEyNTksImV4cCI6MjEwMjYxNzI1OX0.3LKmJ1n9tf7AFLrQxRytHY1zFCJwW4WVwh_TLMGLZPA',
+      VITE_SUPABASE_URL: 'https://spyvffxlqcpdbbnoohsz.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNweXZmZnhscWNwZGJibm9vaHN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxNzgxODMsImV4cCI6MjEwMTc1NDE4M30._s7wVp4Yi9R3nipVdWbjtevNOeceh_wy0UvAO7RiQjM',
       VITE_ENABLE_MULTI_STORE: false,
       VITE_DEFAULT_STORE_ID: 'store_fahad_01',
     };

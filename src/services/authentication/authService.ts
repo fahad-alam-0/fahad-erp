@@ -54,6 +54,28 @@ export const authService = {
     }
   },
 
+  async resetPasswordForEmail(email: string): Promise<ServiceResult<void>> {
+    try {
+      const redirectUrl = `${window.location.origin}/reset-password`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectUrl,
+      });
+
+      if (error) {
+        return {
+          success: false,
+          data: null,
+          error: error.message,
+        };
+      }
+
+      return { success: true, data: undefined };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send password reset email.';
+      return { success: false, data: null, error: message };
+    }
+  },
+
   async signOut(): Promise<ServiceResult<void>> {
     try {
       const { error } = await supabase.auth.signOut();

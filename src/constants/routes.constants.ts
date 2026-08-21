@@ -1,6 +1,7 @@
 export const ROUTES = {
   AUTH: {
     LOGIN: '/login',
+    RESET_PASSWORD: '/reset-password',
     UNAUTHORIZED: '/unauthorized',
     ACCOUNT_DISABLED: '/account-disabled',
   },

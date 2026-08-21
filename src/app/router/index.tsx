@@ -10,6 +10,7 @@ import { ROUTES } from '@/constants/routes.constants';
 
 // Pages
 import { LoginPage } from '@/features/auth/pages/LoginPage';
+import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { UnauthorizedPage } from '@/features/auth/pages/UnauthorizedPage';
 import { AccountDisabledPage } from '@/features/auth/pages/AccountDisabledPage';
 import { NotFoundPage } from '@/features/auth/pages/NotFoundPage';
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
         element: <AuthLayout />,
         children: [
           { path: ROUTES.AUTH.LOGIN, element: <LoginPage /> },
+          { path: ROUTES.AUTH.RESET_PASSWORD, element: <ResetPasswordPage /> },
           { path: ROUTES.AUTH.UNAUTHORIZED, element: <UnauthorizedPage /> },
           { path: ROUTES.AUTH.ACCOUNT_DISABLED, element: <AccountDisabledPage /> },
         ],

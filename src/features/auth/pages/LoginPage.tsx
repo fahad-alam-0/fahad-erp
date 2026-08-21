@@ -6,6 +6,8 @@ import { Header } from '@/components/common/Header';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Lock, Mail, Loader2 } from 'lucide-react';
 
+import { authService } from '@/services/authentication/authService';
+
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -13,8 +15,27 @@ export const LoginPage: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isResetLoading, setIsResetLoading] = useState(false);
+  const [resetSentMessage, setResetSentMessage] = useState<string | null>(null);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || ROUTES.DASHBOARD;
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email address to receive a password reset link.');
+      return;
+    }
+    setError(null);
+    setResetSentMessage(null);
+    setIsResetLoading(true);
+    const res = await authService.resetPasswordForEmail(email.trim());
+    setIsResetLoading(false);
+    if (!res.success) {
+      setError(res.error || 'Failed to send reset link.');
+    } else {
+      setResetSentMessage('Password reset link sent to your email. Please check your inbox.');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,9 +84,19 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-            <Lock className="w-3.5 h-3.5" /> Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5" /> Password
+            </label>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={isResetLoading}
+              className="text-xs text-primary hover:underline font-medium"
+            >
+              {isResetLoading ? 'Sending...' : 'Forgot Password?'}
+            </button>
+          </div>
           <input
             type="password"
             value={password}
@@ -79,6 +110,12 @@ export const LoginPage: React.FC = () => {
             className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
           />
         </div>
+
+        {resetSentMessage && (
+          <div className="p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs">
+            {resetSentMessage}
+          </div>
+        )}
 
         <Button
           type="submit"
