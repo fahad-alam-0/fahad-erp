@@ -75,6 +75,7 @@ export interface TechnicianEarningSummary {
 export interface OwnerDashboardMetrics {
   todaySalesTotal: number;
   todayPurchasesTotal: number;
+  totalInventoryValue?: number;
   activeRepairsCount: number;
   readyRepairsCount: number;
   lowStockProductsCount: number;

@@ -25,44 +25,65 @@ export const Sidebar: React.FC = () => {
   const { isCollapsed, toggleSidebar } = useSidebarStore();
   const currentRole = role || profile?.role || UserRole.STAFF;
 
-  const getNavItems = () => {
-    switch (currentRole) {
-      case UserRole.OWNER:
-        return [
-          { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
-          { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-          { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
-          { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
-          { label: 'Sales (POS)', path: ROUTES.SALES, icon: ShoppingCart },
-          { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
-          { label: 'Technicians', path: ROUTES.TECHNICIANS, icon: UserCheck },
-          { label: 'Reports', path: ROUTES.REPORTS, icon: BarChart3 },
-          { label: 'Settings', path: ROUTES.SETTINGS, icon: Settings },
-        ];
-      case UserRole.TECHNICIAN:
-        return [
-          { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
-          { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-          { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
-          { label: 'Sales (POS)', path: ROUTES.SALES, icon: ShoppingCart },
-          { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
-          { label: 'My Account', path: ROUTES.PROFILE, icon: User },
-        ];
-      case UserRole.STAFF:
-      default:
-        return [
-          { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
-          { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
-          { label: 'Inventory', path: ROUTES.INVENTORY.ROOT, icon: Package },
-          { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
-          { label: 'Sales (POS)', path: ROUTES.SALES, icon: ShoppingCart },
-          { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
-          { label: 'My Account', path: ROUTES.PROFILE, icon: User },
-        ];
+  const getNavSections = () => {
+    if (currentRole === UserRole.OWNER) {
+      return [
+        {
+          title: 'MAIN',
+          items: [
+            { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
+            { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
+            { label: 'Products', path: ROUTES.INVENTORY.PRODUCTS, icon: Package },
+            { label: 'Inventory Stock', path: ROUTES.INVENTORY.STOCK, icon: Package },
+            { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
+            { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
+            { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
+            { label: 'Reports', path: ROUTES.REPORTS, icon: BarChart3 },
+          ],
+        },
+        {
+          title: 'ADMINISTRATION',
+          items: [
+            { label: 'User Management', path: ROUTES.TECHNICIANS, icon: UserCheck },
+            { label: 'Settings', path: ROUTES.SETTINGS, icon: Settings },
+          ],
+        },
+      ];
     }
+
+    if (currentRole === UserRole.TECHNICIAN) {
+      return [
+        {
+          title: 'MAIN',
+          items: [
+            { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
+            { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
+            { label: 'Products & Stock', path: ROUTES.INVENTORY.ROOT, icon: Package },
+            { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
+            { label: 'My Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
+            { label: 'My Account', path: ROUTES.PROFILE, icon: User },
+          ],
+        },
+      ];
+    }
+
+    return [
+      {
+        title: 'MAIN',
+        items: [
+          { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: LayoutDashboard },
+          { label: 'Customers', path: ROUTES.CUSTOMERS, icon: Users },
+          { label: 'Products & Stock', path: ROUTES.INVENTORY.ROOT, icon: Package },
+          { label: 'Suppliers', path: ROUTES.INVENTORY.SUPPLIERS, icon: Building2 },
+          { label: 'Sales / POS', path: ROUTES.SALES, icon: ShoppingCart },
+          { label: 'Repairs', path: ROUTES.REPAIRS.ROOT, icon: Wrench },
+          { label: 'My Account', path: ROUTES.PROFILE, icon: User },
+        ],
+      },
+    ];
   };
 
-  const navItems = getNavItems();
+  const navSections = getNavSections();
 
   return (
     <aside
@@ -93,30 +114,39 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {/* Nav List */}
-      <nav className="flex-1 px-2.5 py-4 space-y-1.5 overflow-y-auto">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              title={isCollapsed ? item.label : undefined}
-              className={({ isActive }) =>
-                `flex items-center ${
-                  isCollapsed ? 'justify-center px-0' : 'px-3'
-                } py-2.5 text-xs font-medium rounded-lg transition-all duration-150 pressable ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                }`
-              }
-            >
-              <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'} shrink-0`} />
-              {!isCollapsed && <span className="truncate">{item.label}</span>}
-            </NavLink>
-          );
-        })}
+      {/* Nav Sections List */}
+      <nav className="flex-1 px-2.5 py-4 space-y-4 overflow-y-auto">
+        {navSections.map((section) => (
+          <div key={section.title} className="space-y-1">
+            {!isCollapsed && (
+              <h3 className="px-3 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
+                {section.title}
+              </h3>
+            )}
+            {section.items.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  title={isCollapsed ? item.label : undefined}
+                  className={({ isActive }) =>
+                    `flex items-center ${
+                      isCollapsed ? 'justify-center px-0' : 'px-3'
+                    } py-2 text-xs font-medium rounded-lg transition-all duration-150 pressable ${
+                      isActive
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    }`
+                  }
+                >
+                  <Icon className={`h-4 w-4 ${isCollapsed ? '' : 'mr-3'} shrink-0`} />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                </NavLink>
+              );
+            })}
+          </div>
+        ))}
       </nav>
     </aside>
   );

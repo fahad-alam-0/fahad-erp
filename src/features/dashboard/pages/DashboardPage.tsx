@@ -28,6 +28,7 @@ import {
   UserCheck,
   ClipboardList,
   FileSpreadsheet,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -145,10 +146,10 @@ export const DashboardPage: React.FC = () => {
             variant="emerald"
           />
           <StatCard
-            title="Today's Purchases"
-            value={formatCurrency(metrics.todayPurchasesTotal, 'INR')}
-            subtitle="Stock purchasing expense"
-            icon={Building2}
+            title="Total Inventory Value"
+            value={formatCurrency(metrics.totalInventoryValue || 0, 'INR')}
+            subtitle="Current active stock value"
+            icon={Coins}
             variant="accent"
           />
           <StatCard
@@ -159,11 +160,11 @@ export const DashboardPage: React.FC = () => {
             variant="warning"
           />
           <StatCard
-            title="Ready for Pickup"
-            value={`${metrics.readyRepairsCount} Tickets`}
-            subtitle="Completed & ready"
-            icon={CheckCircle2}
-            variant="emerald"
+            title="Low Stock Items"
+            value={`${metrics.lowStockProductsCount} Products`}
+            subtitle="At or below threshold"
+            icon={AlertTriangle}
+            variant={metrics.lowStockProductsCount > 0 ? 'warning' : 'emerald'}
           />
         </div>
 

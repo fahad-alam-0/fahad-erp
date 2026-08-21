@@ -112,6 +112,17 @@ export const dashboardService = {
       0
     );
 
+    // Total Inventory Value
+    const invValRes = await supabase
+      .from('products')
+      .select('stock_quantity, current_cost_price')
+      .eq('is_active', true);
+
+    const totalInventoryValue = (invValRes.data || []).reduce(
+      (sum, p) => sum + Number(p.stock_quantity || 0) * Number(p.current_cost_price || 0),
+      0
+    );
+
     // 3. Active Repairs Count
     const activeRepairsRes = await supabase
       .from('repair_jobs')
@@ -258,6 +269,7 @@ export const dashboardService = {
     return {
       todaySalesTotal,
       todayPurchasesTotal,
+      totalInventoryValue,
       activeRepairsCount: activeRepairsRes.count || 0,
       readyRepairsCount: readyRepairsRes.count || 0,
       lowStockProductsCount: lowStockProducts.length,
