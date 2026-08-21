@@ -65,6 +65,15 @@ export const CustomersPage: React.FC = () => {
     loadCustomers(debouncedSearch);
   }, [debouncedSearch, loadCustomers]);
 
+  // Refetch customer directory when window regains focus or route becomes active
+  useEffect(() => {
+    const onFocus = () => {
+      loadCustomers(debouncedSearch);
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [debouncedSearch, loadCustomers]);
+
   const handleCreateNewClick = () => {
     setEditingCustomer(null);
     setIsFormModalOpen(true);

@@ -137,13 +137,13 @@ export const customerService = {
   async getCustomerRepairHistory(customerId: string): Promise<CustomerRepairHistoryItem[]> {
     const { data: jobs, error: jobsErr } = await supabase
       .from('repair_jobs')
-      .select('id, job_number, device_type, device_brand, device_model, reported_problem, status, payment_status, quoted_amount, service_revenue, created_at, updated_at, technician:profiles!left(full_name)')
+      .select('id, job_number, device_type, device_brand, device_model, reported_problem, status, payment_status, quoted_amount, service_revenue, created_at, updated_at, technician:profiles!repair_jobs_technician_id_fkey(full_name)')
       .eq('customer_id', customerId)
       .order('created_at', { ascending: false });
 
     if (jobsErr) {
       console.error('Error fetching customer repair history:', jobsErr);
-      return [];
+      throw new Error(jobsErr.message || 'Failed to fetch customer repair history.');
     }
 
     if (!jobs || jobs.length === 0) {
